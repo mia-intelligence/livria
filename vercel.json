@@ -1,18 +1,8 @@
 {
-  "version": 2,
-  "builds": [
-    { "src": "api/**/*.js", "use": "@vercel/node" },
-    { "src": "public/**/*", "use": "@vercel/static" }
-  ],
-  "routes": [
-    { "src": "/api/(.*)",          "dest": "/api/$1" },
-    { "src": "/css/(.*)",          "dest": "/public/css/$1" },
-    { "src": "/js/(.*)",           "dest": "/public/js/$1" },
-    { "src": "/images/(.*)",       "dest": "/public/images/$1" },
-    { "src": "/livreur",           "dest": "/public/livreur.html" },
-    { "src": "/adv",               "dest": "/public/adv.html" },
-    { "src": "/admin",             "dest": "/public/admin.html" },
-    { "src": "/(index\\.html)?$",  "dest": "/public/index.html" },
-    { "src": "/(.*)",              "dest": "/public/index.html" }
+  "outputDirectory": "public",
+  "rewrites": [
+    { "source": "/livreur", "destination": "/livreur.html" },
+    { "source": "/adv",     "destination": "/adv.html" },
+    { "source": "/admin",   "destination": "/admin.html" }
   ]
 }
