@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LIVRIAL — Connexion</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="login-page">
+  <div class="login-card">
+    <div class="login-logo">
+      <img src="/images/atrial-logo.jpeg" alt="Atrial">
+      <div>
+        <div class="app-title">LIVR<span>I</span>AL</div>
+        <div class="app-sub">Groupe Atrial · Gestion des tournées</div>
+      </div>
+    </div>
+
+    <div class="login-error" id="login-error"></div>
+
+    <form id="login-form" autocomplete="on">
+      <div class="field">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" autocomplete="username" placeholder="prenom.nom@atrial.fr" required>
+      </div>
+      <div class="field">
+        <label for="password">Mot de passe</label>
+        <input type="password" id="password" name="password" autocomplete="current-password" placeholder="••••••••" required>
+      </div>
+      <button type="submit" class="btn primary" id="login-btn">Se connecter</button>
+    </form>
+  </div>
+</div>
+
+<script>
+const ROLE_REDIRECT = {
+  LIVREUR: '/livreur',
+  ADV: '/adv',
+  ADMIN: '/admin',
+};
+
+document.getElementById('login-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('login-btn');
+  const errEl = document.getElementById('login-error');
+  errEl.classList.remove('visible');
+  btn.disabled = true;
+  btn.textContent = 'Connexion…';
+
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: document.getElementById('email').value,
+        password: document.getElementById('password').value,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      errEl.textContent = data.error || 'Erreur de connexion';
+      errEl.classList.add('visible');
+    } else {
+      window.location.href = ROLE_REDIRECT[data.role] || '/';
+    }
+  } catch {
+    errEl.textContent = 'Erreur réseau. Vérifiez votre connexion.';
+    errEl.classList.add('visible');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Se connecter';
+  }
+});
+</script>
+</body>
+</html>

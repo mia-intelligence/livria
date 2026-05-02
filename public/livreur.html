@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>LIVRIAL — Tournée du jour</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    body { background: var(--canvas); }
+    @media print {
+      .map-container, .fab, .stop-sheet-overlay, .stop-sheet { display: none !important; }
+      .livreur-layout { max-width: 100%; }
+      .stops-list { padding-bottom: 0; overflow: visible; }
+      .stop-card { cursor: default; }
+      body { background: #fff; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="livreur-layout">
+
+  <!-- HEADER -->
+  <header class="livreur-header">
+    <div class="brand-left">
+      <img src="/images/atrial-logo.jpeg" alt="Atrial">
+      <div class="brand-meta">
+        <div class="role-label">LIVREUR</div>
+      </div>
+    </div>
+    <div class="brand-right">
+      <div class="app-name">LIVR<span>I</span>AL</div>
+      <div class="today-date" id="today-date"></div>
+    </div>
+  </header>
+
+  <!-- SUMMARY STRIP -->
+  <div class="summary-strip">
+    <div class="sum-item">
+      <div class="sum-label">Total</div>
+      <div class="sum-value" id="sum-total"><em>—</em></div>
+    </div>
+    <div class="sum-item">
+      <div class="sum-label">Livrés</div>
+      <div class="sum-value" id="sum-done"><em>—</em></div>
+    </div>
+    <div class="sum-item">
+      <div class="sum-label">Restants</div>
+      <div class="sum-value" id="sum-remaining"><em>—</em></div>
+    </div>
+  </div>
+
+  <!-- MAP -->
+  <div class="map-container">
+    <div id="livreur-map"></div>
+  </div>
+
+  <!-- STOPS LIST -->
+  <div class="stops-list" id="stops-list">
+    <div style="text-align:center;padding:40px 20px;color:var(--ink-mute);">
+      Chargement de la tournée…
+    </div>
+  </div>
+
+</div>
+
+<!-- FAB PRINT -->
+<button class="fab" onclick="window.print()">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+    <path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+    <rect x="6" y="14" width="12" height="8" rx="1" stroke="currentColor" stroke-width="2"/>
+  </svg>
+  Imprimer ma fiche
+</button>
+
+<!-- STOP DETAIL SHEET -->
+<div class="stop-sheet-overlay" id="sheet-overlay" onclick="closeSheet()"></div>
+<div class="stop-sheet" id="stop-sheet">
+  <div class="sheet-grabber"></div>
+  <div class="sheet-title" id="sheet-title"></div>
+  <div class="sheet-sub" id="sheet-affaire"></div>
+
+  <div class="sheet-detail-row">
+    <div class="label">Adresse</div>
+    <div id="sheet-adresse"></div>
+  </div>
+  <div class="sheet-detail-row">
+    <div class="label">Téléphone</div>
+    <div id="sheet-tel"></div>
+  </div>
+  <div class="sheet-detail-row">
+    <div class="label">Statut actuel</div>
+    <div id="sheet-statut-current"></div>
+  </div>
+
+  <div class="status-actions" id="status-actions"></div>
+</div>
+
+<script src="/js/livreur.js"></script>
+<script>
+  function initMap() { window._mapReady = true; if (window._stopsReady) renderMap(window._stops); }
+</script>
+<script async
+  src="https://maps.googleapis.com/maps/api/js?key=__GMAPS_KEY__&callback=initMap&loading=async">
+</script>
+</body>
+</html>

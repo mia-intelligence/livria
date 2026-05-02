@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LIVRIAL — Console ADV</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    /* ADV-specific layout overrides */
+    body { background: var(--canvas); }
+
+    /* KPI danger variant */
+    .kpi .kpi-value.danger { color: var(--danger); }
+
+    /* Dashboard grid */
+    .dash-grid {
+      display: grid;
+      grid-template-columns: minmax(0,1fr) 340px;
+      gap: 18px;
+    }
+    .dash-col { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+
+    /* Map card */
+    .map-card { padding: 0; overflow: hidden; }
+    .map-card .map-head {
+      padding: 14px 18px; display: flex; align-items: center;
+      justify-content: space-between; border-bottom: 1px solid var(--line);
+    }
+    .map-card .map-head h3 { margin: 0; font-size: 14px; font-weight: 700; }
+    .map-card .legend { display: flex; gap: 12px; font-size: 11.5px; color: var(--ink-soft); }
+    .map-card .legend span { display: inline-flex; align-items: center; gap: 5px; }
+    .map-card .legend i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    #adv-map { height: 280px; width: 100%; display: block; }
+
+    /* Stops table filters */
+    .stops-section { display: none; }
+    .stops-section.active { display: block; }
+
+    /* Affaires à planifier */
+    .affaire-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 0; border-bottom: 1px solid var(--line-soft);
+    }
+    .affaire-row:last-child { border-bottom: 0; }
+    .affaire-info { flex: 1; min-width: 0; }
+    .affaire-info .a-name { font-size: 13.5px; font-weight: 600; }
+    .affaire-info .a-addr { font-size: 12px; color: var(--ink-soft); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .affaire-info .a-meta { font-size: 11px; color: var(--ink-mute); margin-top: 3px; }
+
+    /* Agenda / alerts */
+    .alert-row { display: flex; gap: 10px; padding: 10px 12px; border-radius: 10px; background: var(--danger-soft); align-items: flex-start; font-size: 12.5px; color: #7c2929; margin-bottom: 8px; }
+    .alert-row b { display: block; font-weight: 700; margin-bottom: 2px; }
+
+    /* Nouvelle livraison modal */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  </style>
+</head>
+<body>
+<div class="app-layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <a class="brand" href="/adv">
+      <div class="logo-circle"><img src="/images/atrial-logo.jpeg" alt="Atrial"></div>
+      <div>
+        <div class="app-name">LIVR<span>I</span>AL</div>
+        <div class="org">Groupe Atrial · ADV</div>
+      </div>
+    </a>
+
+    <div class="nav-section">Pilotage</div>
+    <nav id="sidebar-nav">
+      <a class="active" data-section="dashboard" onclick="showSection('dashboard')">
+        <svg class="ic" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="9" rx="1" stroke="currentColor" stroke-width="2"/><rect x="14" y="3" width="7" height="5" rx="1" stroke="currentColor" stroke-width="2"/><rect x="14" y="12" width="7" height="9" rx="1" stroke="currentColor" stroke-width="2"/><rect x="3" y="16" width="7" height="5" rx="1" stroke="currentColor" stroke-width="2"/></svg>
+        Tableau de bord
+      </a>
+      <a data-section="affaires" onclick="showSection('affaires')">
+        <svg class="ic" viewBox="0 0 24 24" fill="none"><path d="M12 2l9 4-9 4-9-4 9-4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M3 12l9 4 9-4M3 18l9 4 9-4" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+        Affaires à planifier
+        <span class="badge" id="badge-affaires">0</span>
+      </a>
+      <a data-section="tournee" onclick="showSection('tournee')">
+        <svg class="ic" viewBox="0 0 24 24" fill="none"><path d="M3 7h13l4 4v5h-2" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="7" cy="17" r="2" stroke="currentColor" stroke-width="2"/><circle cx="17" cy="17" r="2" stroke="currentColor" stroke-width="2"/><path d="M3 7v10h2M9 17h6" stroke="currentColor" stroke-width="2"/></svg>
+        Tournée du jour
+      </a>
+    </nav>
+
+    <div class="user-row">
+      <div class="av" id="user-av">—</div>
+      <div>
+        <div class="user-name" id="user-name">—</div>
+        <div class="user-role">ADV</div>
+      </div>
+      <button class="logout-btn" onclick="logout()">Déconnexion</button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main-area">
+    <div class="topbar">
+      <div class="crumbs">
+        <b id="topbar-title">Tableau de bord</b>
+        <span class="sep">·</span>
+        <span id="topbar-date"></span>
+      </div>
+      <div class="top-actions">
+        <button class="btn primary" onclick="openNewStopModal()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg>
+          Nouvelle livraison
+        </button>
+      </div>
+    </div>
+
+    <div class="page-content">
+
+      <!-- ── TABLEAU DE BORD ─────────────────────────────── -->
+      <div class="stops-section active" id="section-dashboard">
+        <div class="page-head">
+          <div>
+            <h1 id="dash-greeting">Bonjour</h1>
+            <div class="lead" id="dash-lead">Chargement…</div>
+          </div>
+        </div>
+
+        <!-- KPIs -->
+        <div class="kpi-grid">
+          <div class="kpi">
+            <span class="kpi-label">Stops du jour</span>
+            <span class="kpi-value" id="kpi-total">—</span>
+            <span class="kpi-sub">tous types confondus</span>
+          </div>
+          <div class="kpi">
+            <span class="kpi-label">Livrés</span>
+            <span class="kpi-value" id="kpi-done" style="color:var(--success)">—</span>
+            <span class="kpi-sub" id="kpi-done-pct">—</span>
+          </div>
+          <div class="kpi">
+            <span class="kpi-label">En attente</span>
+            <span class="kpi-value" id="kpi-pending">—</span>
+            <span class="kpi-sub">À livrer + En cours</span>
+          </div>
+          <div class="kpi">
+            <span class="kpi-label">À planifier</span>
+            <span class="kpi-value danger" id="kpi-affaires">—</span>
+            <span class="kpi-sub">stops non planifiés</span>
+          </div>
+        </div>
+
+        <div class="dash-grid">
+          <div class="dash-col">
+            <!-- Carte -->
+            <div class="card map-card">
+              <div class="map-head">
+                <h3>Stops du jour · carte</h3>
+                <div class="legend">
+                  <span><i style="background:#3DBE7A"></i>Livré</span>
+                  <span><i style="background:#F2A93B"></i>En cours</span>
+                  <span><i style="background:#9AA3AD"></i>À livrer</span>
+                </div>
+              </div>
+              <div id="adv-map"></div>
+            </div>
+
+            <!-- Liste rapide tournée -->
+            <div class="card">
+              <div class="card-head">
+                <h3>Résumé de la tournée</h3>
+                <a style="font-size:12px;font-weight:600;cursor:pointer;color:var(--turquoise)" onclick="showSection('tournee')">Voir tout →</a>
+              </div>
+              <div id="dash-stops-preview"></div>
+            </div>
+          </div>
+
+          <!-- Colonne droite -->
+          <div class="dash-col">
+            <!-- Alertes -->
+            <div class="card" id="dash-alerts-card" style="display:none">
+              <div class="card-head">
+                <h3>Alertes</h3>
+                <span class="tag danger" id="dash-alerts-count">0</span>
+              </div>
+              <div id="dash-alerts"></div>
+            </div>
+
+            <!-- Affaires à planifier -->
+            <div class="card">
+              <div class="card-head">
+                <h3>À planifier aujourd'hui</h3>
+                <a style="font-size:12px;font-weight:600;cursor:pointer;color:var(--turquoise)" onclick="showSection('affaires')">Voir tout →</a>
+              </div>
+              <div id="dash-affaires-preview">
+                <div style="color:var(--ink-mute);font-size:13px;text-align:center;padding:16px 0">Chargement…</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── AFFAIRES À PLANIFIER ──────────────────────────── -->
+      <div class="stops-section" id="section-affaires">
+        <div class="page-head">
+          <div>
+            <h1>Affaires à planifier</h1>
+            <div class="lead">Stops reçus via Make — non encore assignés à une tournée</div>
+          </div>
+        </div>
+        <div class="card">
+          <div id="affaires-list">
+            <div style="color:var(--ink-mute);font-size:13px;text-align:center;padding:32px 0">Chargement…</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TOURNÉE DU JOUR ───────────────────────────────── -->
+      <div class="stops-section" id="section-tournee">
+        <div class="page-head">
+          <div>
+            <h1>Tournée du jour</h1>
+            <div class="lead" id="tournee-lead">Chargement…</div>
+          </div>
+        </div>
+
+        <!-- Filtres -->
+        <div class="filter-bar">
+          <button class="chip active" data-filter="ALL"   onclick="setFilter('ALL')">Tous</button>
+          <button class="chip"        data-filter="ATRIAL"       onclick="setFilter('ATRIAL')">
+            <span style="width:8px;height:8px;border-radius:50%;background:var(--type-atrial);display:inline-block"></span>
+            ATRIAL
+          </button>
+          <button class="chip"        data-filter="ENLEVEMENT"   onclick="setFilter('ENLEVEMENT')">
+            <span style="width:8px;height:8px;border-radius:50%;background:var(--type-enlevement);display:inline-block"></span>
+            Enlèvement
+          </button>
+          <button class="chip"        data-filter="TRANSPORTEUR" onclick="setFilter('TRANSPORTEUR')">
+            <span style="width:8px;height:8px;border-radius:50%;background:var(--type-transporteur);display:inline-block"></span>
+            Transporteur
+          </button>
+        </div>
+
+        <div class="card" style="padding:0">
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Société</th>
+                <th>Adresse</th>
+                <th>Affaire</th>
+                <th>Type</th>
+                <th>Statut</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="tournee-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div><!-- /page-content -->
+  </div><!-- /main-area -->
+</div><!-- /app-layout -->
+
+<!-- ── MODAL NOUVELLE LIVRAISON ─────────────────────────────── -->
+<div class="modal-overlay hidden" id="new-stop-modal">
+  <div class="modal">
+    <h2>Nouvelle livraison</h2>
+    <div class="modal-sub">Ajouter manuellement un stop à la tournée du jour</div>
+
+    <div id="modal-error" style="background:var(--danger-soft);color:#A14444;border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:14px;display:none"></div>
+
+    <div class="field">
+      <label>Société *</label>
+      <input type="text" id="ns-societe" placeholder="Nom de la société">
+    </div>
+    <div class="field">
+      <label>Adresse *</label>
+      <input type="text" id="ns-adresse" placeholder="Adresse complète">
+    </div>
+    <div class="grid-2">
+      <div class="field">
+        <label>Téléphone</label>
+        <input type="tel" id="ns-telephone" placeholder="06 XX XX XX XX">
+      </div>
+      <div class="field">
+        <label>N° Affaire</label>
+        <input type="text" id="ns-affaire" placeholder="2026-XXX">
+      </div>
+    </div>
+    <div class="field">
+      <label>Type *</label>
+      <select id="ns-type">
+        <option value="ATRIAL">ATRIAL</option>
+        <option value="ENLEVEMENT">ENLÈVEMENT</option>
+        <option value="TRANSPORTEUR">TRANSPORTEUR</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeNewStopModal()">Annuler</button>
+      <button class="btn primary" onclick="createStop()">Ajouter le stop</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL CONFIRMER AJOUT À LA TOURNÉE ───────────────────── -->
+<div class="modal-overlay hidden" id="assign-modal">
+  <div class="modal">
+    <h2>Ajouter à la tournée du jour ?</h2>
+    <div class="modal-sub" id="assign-modal-desc"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeAssignModal()">Annuler</button>
+      <button class="btn primary" onclick="confirmAssign()">Confirmer</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/adv.js"></script>
+<script>
+  function initMap() { window._mapReady = true; if (window._stopsLoaded) renderAdvMap(); }
+</script>
+<script async
+  src="https://maps.googleapis.com/maps/api/js?key=__GMAPS_KEY__&callback=initMap&loading=async">
+</script>
+</body>
+</html>

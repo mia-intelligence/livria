@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LIVRIAL — Administration</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    body { background: var(--canvas); }
+
+    /* Role badges */
+    .role-badge {
+      display: inline-block; padding: 2px 9px; border-radius: 6px;
+      font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    }
+    .role-badge.LIVREUR     { background: #E6F6F6; color: #2E8F8F; }
+    .role-badge.ADV         { background: #E3EEF6; color: #3A6080; }
+    .role-badge.ADMIN       { background: #F1E6F6; color: #6A2E8F; }
+
+    /* Status dot */
+    .user-actif   { color: var(--success); font-weight: 600; font-size: 12px; }
+    .user-revoked { color: var(--danger);  font-weight: 600; font-size: 12px; }
+
+    /* History expand */
+    .history-row { background: #FAFBFC; }
+    .history-row td { padding: 8px 20px 16px 56px; color: var(--ink-soft); font-size: 12px; }
+  </style>
+</head>
+<body>
+<div class="app-layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <a class="brand" href="/admin">
+      <div class="logo-circle"><img src="/images/atrial-logo.jpeg" alt="Atrial"></div>
+      <div>
+        <div class="app-name">LIVR<span>I</span>AL</div>
+        <div class="org">Groupe Atrial · Admin</div>
+      </div>
+    </a>
+
+    <div class="nav-section">Administration</div>
+    <nav>
+      <a class="active">
+        <svg class="ic" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8" r="3.5" stroke="currentColor" stroke-width="2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" stroke-width="2"/><circle cx="17" cy="10" r="2.5" stroke="currentColor" stroke-width="2"/><path d="M15 19.5c0-2.1 1.2-3.5 2.5-3.5s2.5 1.4 2.5 3.5" stroke="currentColor" stroke-width="2"/></svg>
+        Utilisateurs
+      </a>
+    </nav>
+
+    <div class="user-row">
+      <div class="av" id="user-av">—</div>
+      <div>
+        <div class="user-name" id="user-name">—</div>
+        <div class="user-role">Administrateur</div>
+      </div>
+      <button class="logout-btn" onclick="logout()">Déconnexion</button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main-area">
+    <div class="topbar">
+      <div class="crumbs">
+        <b>Utilisateurs</b>
+        <span class="sep">·</span>
+        <span id="topbar-date"></span>
+      </div>
+      <div class="top-actions">
+        <button class="btn primary" onclick="openCreateModal()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg>
+          Créer un accès
+        </button>
+      </div>
+    </div>
+
+    <div class="page-content">
+      <div class="page-head">
+        <div>
+          <h1>Gestion des accès</h1>
+          <div class="lead" id="users-lead">Chargement…</div>
+        </div>
+      </div>
+
+      <!-- Feedback message -->
+      <div id="feedback" style="display:none;padding:12px 16px;border-radius:10px;margin-bottom:16px;font-size:13.5px;font-weight:500"></div>
+
+      <div class="card" style="padding:0">
+        <table class="tbl" id="users-table">
+          <thead>
+            <tr>
+              <th>Utilisateur</th>
+              <th>Email</th>
+              <th>Rôle</th>
+              <th>Statut</th>
+              <th>Dernière connexion</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="users-tbody">
+            <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--ink-mute)">Chargement…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL CRÉER UTILISATEUR ────────────────────────────────── -->
+<div class="modal-overlay hidden" id="create-modal">
+  <div class="modal">
+    <h2>Créer un accès</h2>
+    <div class="modal-sub">Le mot de passe temporaire devra être changé à la première connexion.</div>
+
+    <div id="create-error" style="background:var(--danger-soft);color:#A14444;border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:14px;display:none"></div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="field">
+        <label>Prénom *</label>
+        <input type="text" id="cu-prenom" placeholder="Jean">
+      </div>
+      <div class="field">
+        <label>Nom *</label>
+        <input type="text" id="cu-nom" placeholder="Dupont">
+      </div>
+    </div>
+    <div class="field">
+      <label>Email *</label>
+      <input type="email" id="cu-email" placeholder="jean.dupont@atrial.fr">
+    </div>
+    <div class="field">
+      <label>Rôle *</label>
+      <select id="cu-role">
+        <option value="LIVREUR">LIVREUR</option>
+        <option value="ADV">ADV</option>
+        <option value="ADMIN">ADMIN</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Mot de passe temporaire *</label>
+      <input type="text" id="cu-password" placeholder="min. 8 caractères">
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn" onclick="closeCreateModal()">Annuler</button>
+      <button class="btn primary" onclick="createUser()">Créer l'accès</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL CONFIRMER RÉVOCATION ─────────────────────────────── -->
+<div class="modal-overlay hidden" id="revoke-modal">
+  <div class="modal">
+    <h2>Révoquer cet accès ?</h2>
+    <div class="modal-sub" id="revoke-desc"></div>
+    <p style="font-size:13px;color:var(--ink-soft)">
+      L'utilisateur sera immédiatement déconnecté et ne pourra plus se connecter.
+    </p>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeRevokeModal()">Annuler</button>
+      <button class="btn danger" onclick="confirmRevoke()">Révoquer</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/admin.js"></script>
+</body>
+</html>
