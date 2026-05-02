@@ -239,6 +239,97 @@ function updateMapMarker(stop) {
   });
 }
 
+// ── Add stop sheet ────────────────────────────────────────────
+function openAddSheet() {
+  // Fermer le sheet de détail si ouvert
+  closeSheet();
+  ['add-societe', 'add-adresse', 'add-affaire', 'add-tel'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('add-error').style.display = 'none';
+  document.getElementById('add-submit-btn').disabled = false;
+  document.getElementById('add-overlay').classList.add('open');
+  document.getElementById('add-sheet').classList.add('open');
+  setTimeout(() => document.getElementById('add-societe').focus(), 350);
+}
+
+function closeAddSheet() {
+  document.getElementById('add-overlay').classList.remove('open');
+  document.getElementById('add-sheet').classList.remove('open');
+}
+
+async function submitAddStop() {
+  const societe  = document.getElementById('add-societe').value.trim();
+  const adresse  = document.getElementById('add-adresse').value.trim();
+  const affaire  = document.getElementById('add-affaire').value.trim();
+  const tel      = document.getElementById('add-tel').value.trim();
+  const errEl    = document.getElementById('add-error');
+  const btn      = document.getElementById('add-submit-btn');
+
+  errEl.style.display = 'none';
+
+  if (!societe || !adresse) {
+    errEl.textContent = 'La société et l\'adresse sont obligatoires.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Ajout en cours…';
+
+  try {
+    const res = await fetch('/api/stops', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        societe,
+        adresse,
+        telephone:      tel     || null,
+        numero_affaire: affaire || null,
+        type:           'ATRIAL',
+        ordre:          99,
+      }),
+    });
+
+    if (!res.ok) {
+      const d = await res.json();
+      errEl.textContent = d.error || 'Erreur serveur. Réessayez.';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    const newStop = await res.json();
+    stops.push(newStop);
+    window._stops = stops;
+    closeAddSheet();
+    renderStopsList();
+    updateSummary();
+    if (map) renderMap(stops);
+
+    // Feedback visuel bref
+    const feedback = document.createElement('div');
+    feedback.textContent = `✓ ${societe} ajouté à votre tournée`;
+    Object.assign(feedback.style, {
+      position: 'fixed', bottom: '90px', left: '50%',
+      transform: 'translateX(-50%)',
+      background: 'var(--turquoise)', color: '#fff',
+      padding: '10px 20px', borderRadius: '99px',
+      fontSize: '13px', fontWeight: '600',
+      zIndex: '100', whiteSpace: 'nowrap',
+      boxShadow: '0 4px 14px rgba(75,191,191,.4)',
+    });
+    document.body.appendChild(feedback);
+    setTimeout(() => feedback.remove(), 3000);
+
+  } catch {
+    errEl.textContent = 'Erreur réseau. Vérifiez votre connexion.';
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg> Ajouter le stop';
+  }
+}
+
 // ── Utils ─────────────────────────────────────────────────────
 function esc(str) {
   if (!str) return '';
