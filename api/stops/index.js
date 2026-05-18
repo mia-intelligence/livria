@@ -29,7 +29,7 @@ module.exports = async function handler(req, res) {
 
   // Seuls ADV et ADMIN peuvent créer manuellement des stops
   if (req.method === 'POST') {
-    if (!['ADV', 'ADMIN'].includes(role)) {
+    if (!['ADV', 'ADMIN','LIVREUR'].includes(role)) {
       return res.status(403).json({ error: 'Accès refusé' });
     }
 
