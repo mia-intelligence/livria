@@ -52,19 +52,20 @@ if (!VALID_SOCIETES_LIVRAISON.includes(societe_livraison)) {
 }
 
     const { data, error } = await db
-      .from('stops')
-      .insert({
-        societe,
-        adresse,
-        telephone: telephone || null,
-        latitude: latitude || null,
-        longitude: longitude || null,
-        numero_affaire: numero_affaire || null,
-        type,
-        statut: 'A_LIVRER',
-        ordre: ordre || 99,
-        date_tournee: date_tournee || new Date().toISOString().split('T')[0],
-      })
+  .from('stops')
+  .insert({
+    societe: societe || null,
+    adresse: adresse || null,
+    telephone: telephone || null,
+    latitude: latitude || null,
+    longitude: longitude || null,
+    numero_affaire: numero_affaire || null,
+    societe_livraison: societe_livraison || 'ATRIAL',
+    statut: 'A_LIVRER',
+    ordre: ordre || 99,
+    date_tournee: date_tournee || new Date().toISOString().split('T')[0],
+  })
+  .select('*');
       .select()
       .single();
 
