@@ -33,7 +33,14 @@ module.exports = async function handler(req, res) {
       return res.status(403).json({ error: 'Accès refusé' });
     }
 
-    const { societe, adresse, telephone, societe_livraison } = req.body;
+    const {
+  numero_affaire,
+  societe,
+  adresse,
+  telephone,
+  societe_livraison,
+  date_tournee
+} = req.body;
     if (!societe || !adresse || !type) {
       return res.status(400).json({ error: 'societe, adresse et type sont requis' });
     }
