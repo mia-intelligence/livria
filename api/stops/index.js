@@ -39,10 +39,11 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: 'societe, adresse et type sont requis' });
     }
 
-    const VALID_TYPES = ['ATRIAL', 'ENLEVEMENT', 'TRANSPORTEUR'];
-    if (!VALID_TYPES.includes(type)) {
-      return res.status(400).json({ error: 'type invalide' });
-    }
+    const VALID_SOCIETES_LIVRAISON = ['ATRIAL', 'ENLEVEMENT', 'TRANSPORTEUR'];
+
+if (!VALID_SOCIETES_LIVRAISON.includes(societe_livraison)) {
+  return res.status(400).json({ error: 'societe_livraison invalide' });
+}
 
     const { data, error } = await db
       .from('stops')
