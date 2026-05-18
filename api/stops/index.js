@@ -45,7 +45,7 @@ module.exports = async function handler(req, res) {
   ordre
 } = req.body;
    if (!societe || !adresse || !societe_livraison){
-      return res.status(400).json({ error: 'societe, adresse et type sont requis' });
+      return res.status(400).json({ error: 'societe, adresse et societe_livraison sont requis' });
     }
 
     const VALID_SOCIETES_LIVRAISON = ['ATRIAL', 'ENLEVEMENT', 'TRANSPORTEUR'];
