@@ -63,20 +63,32 @@ function showSection(name) {
 }
 
 // ── Load stops ─────────────────────────────────────────────────
-async function loadStops() {
-  try {
-    const res = await fetch('/api/stops');
-    if (res.status === 401) { window.location.href = '/'; return; }
-    allStops = await res.json();
-    window._stopsLoaded = true;
+try {
+  const res = await fetch('/api/stops');
 
-    renderDashboard();
-    renderAffaires();
-    renderTournee();
-    if (window._mapReady) renderAdvMap();
-  } catch {
-    console.error('Erreur chargement stops');
+  if (res.status === 401) {
+    window.location.href = '/';
+    return;
   }
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.error('Erreur API /api/stops:', res.status, errorText);
+    return;
+  }
+
+  allStops = await res.json();
+  window._stopsLoaded = true;
+
+  renderDashboard();
+  renderAffaires();
+  renderTournee();
+
+  if (window._mapReady) {
+    renderAdvMap();
+  }
+} catch (error) {
+  console.error('Erreur chargement stops:', error);
 }
 
 // ── Dashboard ──────────────────────────────────────────────────
