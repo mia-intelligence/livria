@@ -19,7 +19,7 @@ module.exports = async function handler(req, res) {
 
     // Le livreur ne voit que les stops ATRIAL
     if (role === 'LIVREUR') {
-      query = query.eq('type', 'ATRIAL');
+      query = query.eq('societe_livraison', 'ATRIAL');
     }
 
     const { data, error } = await query;
@@ -39,9 +39,12 @@ module.exports = async function handler(req, res) {
   adresse,
   telephone,
   societe_livraison,
-  date_tournee
+  date_tournee,
+  latitude,
+  longitude,
+  ordre
 } = req.body;
-    if (!societe || !adresse || !type) {
+   if (!societe || !adresse || !societe_livraison){
       return res.status(400).json({ error: 'societe, adresse et type sont requis' });
     }
 
@@ -65,9 +68,8 @@ if (!VALID_SOCIETES_LIVRAISON.includes(societe_livraison)) {
     ordre: ordre || 99,
     date_tournee: date_tournee || new Date().toISOString().split('T')[0],
   })
-  .select('*');
-      .select()
-      .single();
+  .select('*')
+.single();
 
     if (error) return res.status(500).json({ error: error.message });
     return res.status(201).json(data);
