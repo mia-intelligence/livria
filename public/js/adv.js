@@ -188,6 +188,22 @@ function renderAffaires() {
 function affaireRowHTML(s, compact) {
   const societeLivraison = s.societe_livraison || 'ATRIAL';
 
+  // Infos magasin
+  let magasinLine = '';
+  if (s.magasin_valide) {
+    const parts = [];
+    if (s.nombre_colis) parts.push(`${s.nombre_colis} colis`);
+    if (s.emplacement)  parts.push(s.emplacement);
+    magasinLine = `<div style="display:inline-flex;align-items:center;gap:5px;margin-top:4px">
+      <span style="width:7px;height:7px;border-radius:50%;background:#3DBE7A;flex-shrink:0"></span>
+      <span style="font-size:12px;color:#2E8F8F;font-weight:600">Magasin prêt${parts.length ? ' · ' + esc(parts.join(' · ')) : ''}</span>
+    </div>`;
+  } else if (s.nombre_colis) {
+    magasinLine = `<div style="font-size:12px;color:#E8A838;margin-top:4px">⏳ Magasin en cours · ${s.nombre_colis} colis</div>`;
+  } else {
+    magasinLine = `<div style="font-size:12px;color:var(--ink-mute);margin-top:4px">⏳ En attente de préparation magasin</div>`;
+  }
+
   return `
     <div class="affaire-row">
       <div style="width:10px;height:10px;border-radius:50%;background:${TYPE_COLOR[societeLivraison] || '#9AA3AD'};flex-shrink:0;margin-top:4px"></div>
@@ -198,8 +214,9 @@ function affaireRowHTML(s, compact) {
           ${s.numero_affaire ? `N° ${esc(s.numero_affaire)} · ` : ''}
           <span class="type-badge ${societeLivraison.toLowerCase()}">${TYPE_LABEL[societeLivraison] || societeLivraison}</span>
         </div>
+        ${magasinLine}
       </div>
-      ${!compact ? `<button class="btn sm primary" onclick="openAssignModal('${s.id}')">Ajouter à la tournée</button>` : ''}
+      ${!compact ? `<button class="btn sm primary" onclick="openAssignModal('${s.id}')">Planifier</button>` : ''}
     </div>
   `;
 }
