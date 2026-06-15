@@ -21,8 +21,10 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === 'PATCH') {
-    const { statut, ordre, nombre_colis, emplacement, photo_url, magasin_valide, magasin_valide_at } = req.body;
-    const VALID_STATUTS = ['A_LIVRER', 'EN_COURS', 'LIVRE'];
+    const { statut, ordre, tournee, vehicule, nombre_colis, emplacement, photo_url, magasin_valide, magasin_valide_at } = req.body;
+    const VALID_STATUTS  = ['A_LIVRER', 'EN_COURS', 'LIVRE'];
+    const VALID_TOURNEES = ['ENLEVEMENT','TOURNEE LUNDI','MARDI T06-T83EST','MERCREDI T13','TOURNEE JEUDI','VENDREDI T83 OUEST','LIVRAISON CHANTIER','TRANSPORTEUR'];
+    const VALID_VEHICULES = ['PL', 'VL'];
 
     const updates = {};
 
@@ -30,7 +32,6 @@ module.exports = async function handler(req, res) {
       if (!VALID_STATUTS.includes(statut)) {
         return res.status(400).json({ error: 'statut invalide' });
       }
-      // Le livreur peut changer le statut uniquement sur les stops ATRIAL
       if (role === 'LIVREUR') {
         const { data: stop } = await db.from('stops').select('societe_livraison').eq('id', id).single();
         if (!stop || stop.societe_livraison !== 'ATRIAL') {
@@ -42,6 +43,21 @@ module.exports = async function handler(req, res) {
 
     if (ordre !== undefined && ['ADV', 'ADMIN'].includes(role)) {
       updates.ordre = ordre;
+    }
+
+    if (['ADV', 'ADMIN'].includes(role)) {
+      if (tournee !== undefined) {
+        if (tournee !== null && !VALID_TOURNEES.includes(tournee)) {
+          return res.status(400).json({ error: 'tournee invalide' });
+        }
+        updates.tournee = tournee;
+      }
+      if (vehicule !== undefined) {
+        if (vehicule !== null && !VALID_VEHICULES.includes(vehicule)) {
+          return res.status(400).json({ error: 'vehicule invalide' });
+        }
+        updates.vehicule = vehicule;
+      }
     }
 
     // Champs magasin — seul le rôle MAGASIN (et ADMIN) peut les modifier

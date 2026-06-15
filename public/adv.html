@@ -247,6 +247,7 @@
                 <th>Adresse</th>
                 <th>Affaire</th>
                 <th>Type</th>
+                <th>Tournée</th>
                 <th>Magasin</th>
                 <th>Statut</th>
                 <th>Actions</th>
@@ -329,11 +330,51 @@
 <!-- ── MODAL CONFIRMER AJOUT À LA TOURNÉE ───────────────────── -->
 <div class="modal-overlay hidden" id="assign-modal">
   <div class="modal">
-    <h2>Ajouter à la tournée du jour ?</h2>
+    <h2>Planifier ce stop</h2>
     <div class="modal-sub" id="assign-modal-desc"></div>
+
+    <div id="assign-error" style="background:var(--danger-soft);color:#A14444;border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:14px;display:none"></div>
+
+    <div class="grid-2">
+      <div class="field">
+        <label>Tournée *</label>
+        <select id="assign-tournee">
+          <option value="">— Sélectionner —</option>
+          <option value="ENLEVEMENT">Enlèvement</option>
+          <option value="TOURNEE LUNDI">Tournée Lundi</option>
+          <option value="MARDI T06-T83EST">Mardi T06-T83EST</option>
+          <option value="MERCREDI T13">Mercredi T13</option>
+          <option value="TOURNEE JEUDI">Tournée Jeudi</option>
+          <option value="VENDREDI T83 OUEST">Vendredi T83 Ouest</option>
+          <option value="LIVRAISON CHANTIER">Livraison Chantier</option>
+          <option value="TRANSPORTEUR">Transporteur</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Véhicule *</label>
+        <select id="assign-vehicule">
+          <option value="">— Sélectionner —</option>
+          <option value="VL">VL — Véhicule léger</option>
+          <option value="PL">PL — Poids lourd</option>
+        </select>
+      </div>
+    </div>
     <div class="modal-actions">
       <button class="btn" onclick="closeAssignModal()">Annuler</button>
-      <button class="btn primary" onclick="confirmAssign()">Confirmer</button>
+      <button class="btn primary" onclick="confirmAssign()">Ajouter à la tournée</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL CONFIRMER SUPPRESSION STOP ──────────────────────── -->
+<div class="modal-overlay hidden" id="delete-stop-modal">
+  <div class="modal">
+    <h2>Supprimer ce stop ?</h2>
+    <div class="modal-sub" id="delete-stop-desc"></div>
+    <p style="font-size:13px;color:var(--ink-soft)">Cette action est irréversible.</p>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeDeleteStopModal()">Annuler</button>
+      <button class="btn danger" onclick="confirmDeleteStop()">Supprimer</button>
     </div>
   </div>
 </div>

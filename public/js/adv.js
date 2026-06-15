@@ -4,6 +4,7 @@ let allStops = [];
 let activeFilter = 'ALL';
 let advMap = null;
 let pendingAssignId = null;
+let pendingDeleteId = null;
 
 const STATUS_LABEL = { A_LIVRER: 'À livrer', EN_COURS: 'En cours', LIVRE: 'Livré' };
 const STATUS_CLASS = { A_LIVRER: 'todo', EN_COURS: 'now', LIVRE: 'done' };
@@ -211,7 +212,12 @@ function openAssignModal(id) {
   pendingAssignId = id;
 
   document.getElementById('assign-modal-desc').textContent =
-    `${stop.societe} — ${stop.adresse} sera ajouté à la tournée du jour avec le statut "À livrer".`;
+    `${stop.societe} — ${stop.adresse}`;
+
+  // Pré-remplir si déjà des valeurs
+  document.getElementById('assign-tournee').value = stop.tournee  || '';
+  document.getElementById('assign-vehicule').value = stop.vehicule || '';
+  document.getElementById('assign-error').style.display = 'none';
 
   document.getElementById('assign-modal').classList.remove('hidden');
 }
@@ -224,6 +230,23 @@ function closeAssignModal() {
 async function confirmAssign() {
   if (!pendingAssignId) return;
 
+  const tournee  = document.getElementById('assign-tournee').value;
+  const vehicule = document.getElementById('assign-vehicule').value;
+  const errEl    = document.getElementById('assign-error');
+
+  errEl.style.display = 'none';
+
+  if (!tournee) {
+    errEl.textContent = 'La tournée est obligatoire.';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (!vehicule) {
+    errEl.textContent = 'Le véhicule est obligatoire.';
+    errEl.style.display = 'block';
+    return;
+  }
+
   try {
     const maxOrdre = allStops
       .filter(s => s.ordre !== 99)
@@ -232,7 +255,7 @@ async function confirmAssign() {
     const res = await fetch(`/api/stops/${pendingAssignId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ordre: maxOrdre + 1 })
+      body: JSON.stringify({ ordre: maxOrdre + 1, tournee, vehicule })
     });
 
     if (!res.ok) throw new Error();
@@ -240,7 +263,35 @@ async function confirmAssign() {
     closeAssignModal();
     await loadStops();
   } catch {
-    alert('Erreur lors de l\'ajout. Réessayez.');
+    errEl.textContent = 'Erreur lors de l\'ajout. Réessayez.';
+    errEl.style.display = 'block';
+  }
+}
+
+// ── Supprimer stop ─────────────────────────────────────────────
+function openDeleteStopModal(id) {
+  const stop = allStops.find(s => s.id === id);
+  if (!stop) return;
+  pendingDeleteId = id;
+  document.getElementById('delete-stop-desc').textContent =
+    `${stop.societe} — ${stop.adresse}`;
+  document.getElementById('delete-stop-modal').classList.remove('hidden');
+}
+
+function closeDeleteStopModal() {
+  document.getElementById('delete-stop-modal').classList.add('hidden');
+  pendingDeleteId = null;
+}
+
+async function confirmDeleteStop() {
+  if (!pendingDeleteId) return;
+  try {
+    const res = await fetch(`/api/stops/${pendingDeleteId}`, { method: 'DELETE' });
+    if (!res.ok && res.status !== 204) throw new Error();
+    closeDeleteStopModal();
+    await loadStops();
+  } catch {
+    alert('Erreur lors de la suppression. Réessayez.');
   }
 }
 
@@ -269,12 +320,17 @@ function renderTournee() {
   const tbody = document.getElementById('tournee-tbody');
 
   if (!filtered.length) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--ink-mute)">Aucun stop pour ce filtre.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--ink-mute)">Aucun stop pour ce filtre.</td></tr>`;
     return;
   }
 
   tbody.innerHTML = filtered.map(s => {
     const societeLivraison = s.societe_livraison || 'ATRIAL';
+
+    // Colonne tournée/véhicule
+    const tourneeCell = s.tournee
+      ? `<span style="font-size:12px;font-weight:600;color:var(--ink)">${esc(s.tournee)}</span>${s.vehicule ? `<br><span style="font-size:11px;color:var(--ink-mute)">${esc(s.vehicule)}</span>` : ''}`
+      : `<span style="font-size:12px;color:var(--ink-mute)">—</span>`;
 
     // Colonne magasin
     let magasinCell = '';
@@ -292,24 +348,49 @@ function renderTournee() {
       magasinCell = `<span style="font-size:12px;color:var(--ink-mute)">—</span>`;
     }
 
+    // Colonne actions
+    let actionsCell = '';
+    if (s.statut === 'LIVRE') {
+      actionsCell = `
+        <span style="color:var(--success);font-weight:600;font-size:12px">✓ Livré</span>
+        <button onclick="openDeleteStopModal('${s.id}')" title="Supprimer"
+          style="margin-left:8px;border:none;background:none;cursor:pointer;color:var(--ink-mute);padding:2px 4px;border-radius:6px"
+          onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--ink-mute)'">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><polyline points="3 6 5 6 21 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M19 6l-1 14H6L5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M10 11v6M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9 6V4h6v2" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+        </button>`;
+    } else {
+      actionsCell = `
+        <div style="display:flex;align-items:center;gap:6px">
+          <select style="border:1px solid var(--line);border-radius:8px;padding:4px 8px;font:inherit;font-size:12px;color:var(--ink);cursor:pointer"
+            onchange="changeStopStatus('${s.id}', this.value)">
+            <option value="A_LIVRER" ${s.statut === 'A_LIVRER' ? 'selected' : ''}>À livrer</option>
+            <option value="EN_COURS" ${s.statut === 'EN_COURS' ? 'selected' : ''}>En cours</option>
+            <option value="LIVRE">Livré</option>
+          </select>
+          <button onclick="changeStopStatus('${s.id}','LIVRE')"
+            style="background:var(--success);color:#fff;border:none;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap"
+            title="Marquer comme livré">
+            ✓ Livré
+          </button>
+          <button onclick="openDeleteStopModal('${s.id}')" title="Supprimer"
+            style="border:none;background:none;cursor:pointer;color:var(--ink-mute);padding:2px 4px;border-radius:6px"
+            onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--ink-mute)'">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><polyline points="3 6 5 6 21 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M19 6l-1 14H6L5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M10 11v6M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9 6V4h6v2" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+          </button>
+        </div>`;
+    }
+
     return `
       <tr>
         <td class="strong">${s.ordre ?? '—'}</td>
         <td class="strong">${esc(s.societe)}</td>
-        <td class="muted" style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.adresse)}</td>
+        <td class="muted" style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.adresse)}</td>
         <td class="muted">${s.numero_affaire ? esc(s.numero_affaire) : '—'}</td>
         <td><span class="type-badge ${societeLivraison.toLowerCase()}">${TYPE_LABEL[societeLivraison] || societeLivraison}</span></td>
+        <td>${tourneeCell}</td>
         <td>${magasinCell}</td>
         <td><span class="pill ${STATUS_CLASS[s.statut] || 'todo'}">${STATUS_LABEL[s.statut] || s.statut}</span></td>
-        <td>
-          ${s.statut !== 'LIVRE' ? `
-            <select style="border:1px solid var(--line);border-radius:8px;padding:4px 8px;font:inherit;font-size:12px;color:var(--ink);cursor:pointer"
-              onchange="changeStopStatus('${s.id}', this.value)">
-              <option value="A_LIVRER" ${s.statut === 'A_LIVRER' ? 'selected' : ''}>À livrer</option>
-              <option value="EN_COURS" ${s.statut === 'EN_COURS' ? 'selected' : ''}>En cours</option>
-              <option value="LIVRE" ${s.statut === 'LIVRE' ? 'selected' : ''}>Livré</option>
-            </select>` : '<span style="color:var(--success);font-weight:600;font-size:12px">✓ Livré</span>'}
-        </td>
+        <td>${actionsCell}</td>
       </tr>
     `;
   }).join('');
