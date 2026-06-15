@@ -6,6 +6,32 @@ let advMap = null;
 let pendingAssignId = null;
 let pendingDeleteId = null;
 
+// ── Suggestion tournée par code postal ────────────────────────
+// Règles appliquées dans l'ordre ; première correspondance gagne.
+const TOURNEE_RULES = [
+  // Alpes-Maritimes
+  { test: cp => cp.startsWith('06'),                                     tournee: 'MARDI T06-T83EST',   vehicule: 'VL' },
+  // Bouches-du-Rhône
+  { test: cp => cp.startsWith('13'),                                     tournee: 'MERCREDI T13',       vehicule: 'PL' },
+  // Var EST : 83400-83999 (Hyères, Fréjus, Saint-Tropez, Sainte-Maxime…)
+  { test: cp => cp.startsWith('83') && parseInt(cp) >= 83400,            tournee: 'MARDI T06-T83EST',   vehicule: 'VL' },
+  // Var OUEST : 83000-83399 (Toulon, La Seyne, Six-Fours, Ollioules…)
+  { test: cp => cp.startsWith('83') && parseInt(cp) < 83400,             tournee: 'VENDREDI T83 OUEST', vehicule: 'PL' },
+  // Transporteur (societe_livraison = TRANSPORTEUR)
+  { test: () => false, tournee: 'TRANSPORTEUR', vehicule: 'PL' }, // déclenché manuellement
+];
+
+function suggestTournee(stop) {
+  if (stop.societe_livraison === 'ENLEVEMENT')   return { tournee: 'ENLEVEMENT',   vehicule: 'VL' };
+  if (stop.societe_livraison === 'TRANSPORTEUR') return { tournee: 'TRANSPORTEUR', vehicule: 'PL' };
+
+  const match = (stop.adresse || '').match(/\b(\d{5})\b/);
+  if (!match) return null;
+  const cp = match[1];
+  const rule = TOURNEE_RULES.find(r => r.test(cp));
+  return rule ? { tournee: rule.tournee, vehicule: rule.vehicule, cp } : null;
+}
+
 const STATUS_LABEL = { A_LIVRER: 'À livrer', EN_COURS: 'En cours', LIVRE: 'Livré' };
 const STATUS_CLASS = { A_LIVRER: 'todo', EN_COURS: 'now', LIVRE: 'done' };
 
@@ -231,9 +257,23 @@ function openAssignModal(id) {
   document.getElementById('assign-modal-desc').textContent =
     `${stop.societe} — ${stop.adresse}`;
 
-  // Pré-remplir si déjà des valeurs
-  document.getElementById('assign-tournee').value = stop.tournee  || '';
-  document.getElementById('assign-vehicule').value = stop.vehicule || '';
+  // Suggestion automatique si pas encore de tournée
+  const suggestion = !stop.tournee ? suggestTournee(stop) : null;
+  const tourneeVal  = stop.tournee  || (suggestion ? suggestion.tournee  : '');
+  const vehiculeVal = stop.vehicule || (suggestion ? suggestion.vehicule : '');
+
+  document.getElementById('assign-tournee').value  = tourneeVal;
+  document.getElementById('assign-vehicule').value = vehiculeVal;
+
+  // Afficher ou masquer le bandeau suggestion
+  const badge = document.getElementById('assign-suggestion');
+  if (suggestion && !stop.tournee) {
+    badge.textContent = `💡 Suggestion basée sur le CP ${suggestion.cp} : ${suggestion.tournee} · ${suggestion.vehicule}`;
+    badge.style.display = 'block';
+  } else {
+    badge.style.display = 'none';
+  }
+
   document.getElementById('assign-error').style.display = 'none';
 
   document.getElementById('assign-modal').classList.remove('hidden');
