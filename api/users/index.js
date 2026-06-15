@@ -26,7 +26,7 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: 'Tous les champs sont requis' });
     }
 
-    const VALID_ROLES = ['LIVREUR', 'ADV', 'ADMIN'];
+    const VALID_ROLES = ['LIVREUR', 'ADV', 'ADMIN','MAGASIN'];
     if (!VALID_ROLES.includes(role)) {
       return res.status(400).json({ error: 'Rôle invalide' });
     }
