@@ -334,11 +334,13 @@ async function changeStopStatus(id, newStatut) {
 // ── Nouvelle livraison ADV ────────────────────────────────────
 function openNewStopModal() {
   document.getElementById('new-stop-modal').classList.remove('hidden');
-  document.getElementById('ns-societe').value = '';
-  document.getElementById('ns-adresse').value = '';
+  document.getElementById('ns-societe').value   = '';
+  document.getElementById('ns-adresse').value   = '';
   document.getElementById('ns-telephone').value = '';
-  document.getElementById('ns-affaire').value = '';
-  document.getElementById('ns-type').value = 'ATRIAL';
+  document.getElementById('ns-affaire').value   = '';
+  document.getElementById('ns-type').value      = 'ATRIAL';
+  document.getElementById('ns-tournee').value   = '';
+  document.getElementById('ns-vehicule').value  = '';
   document.getElementById('modal-error').style.display = 'none';
 }
 
@@ -347,17 +349,29 @@ function closeNewStopModal() {
 }
 
 async function createStop() {
-  const societe = document.getElementById('ns-societe').value.trim();
-  const adresse = document.getElementById('ns-adresse').value.trim();
-  const telephone = document.getElementById('ns-telephone').value.trim();
-  const affaire = document.getElementById('ns-affaire').value.trim();
+  const societe           = document.getElementById('ns-societe').value.trim();
+  const adresse           = document.getElementById('ns-adresse').value.trim();
+  const telephone         = document.getElementById('ns-telephone').value.trim();
+  const affaire           = document.getElementById('ns-affaire').value.trim();
   const societe_livraison = document.getElementById('ns-type').value;
-  const errEl = document.getElementById('modal-error');
+  const tournee           = document.getElementById('ns-tournee').value;
+  const vehicule          = document.getElementById('ns-vehicule').value;
+  const errEl             = document.getElementById('modal-error');
 
   errEl.style.display = 'none';
 
   if (!societe || !adresse) {
     errEl.textContent = 'La société et l\'adresse sont obligatoires.';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (!tournee) {
+    errEl.textContent = 'La tournée est obligatoire.';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (!vehicule) {
+    errEl.textContent = 'Le véhicule est obligatoire.';
     errEl.style.display = 'block';
     return;
   }
@@ -369,9 +383,11 @@ async function createStop() {
       body: JSON.stringify({
         societe,
         adresse,
-        telephone: telephone || null,
-        numero_affaire: affaire || null,
-        societe_livraison
+        telephone:      telephone || null,
+        numero_affaire: affaire   || null,
+        societe_livraison,
+        tournee,
+        vehicule,
       })
     });
 

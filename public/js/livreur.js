@@ -5,9 +5,8 @@ let map = null;
 let markers = [];
 let activeStopId = null;
 
-const STATUS_LABEL = { A_LIVRER: 'À livrer', EN_COURS: 'En cours', LIVRE: 'Livré' };
-const STATUS_CLASS  = { A_LIVRER: 'todo',     EN_COURS: 'now',      LIVRE: 'done' };
-const STATUS_NUM_CLASS = { A_LIVRER: 'todo', EN_COURS: 'now', LIVRE: 'done' };
+const STATUS_LABEL     = { A_LIVRER: 'À livrer', EN_COURS: 'En cours', LIVRE: 'Livré' };
+const STATUS_CLASS     = { A_LIVRER: 'todo',     EN_COURS: 'now',      LIVRE: 'done' };
 
 // ── Init ──────────────────────────────────────────────────────
 async function init() {
@@ -70,9 +69,31 @@ function renderStopsList() {
   }
 
   container.innerHTML = stops.map((s, i) => {
-    const sc   = STATUS_CLASS[s.statut] || 'todo';
-    const lbl  = STATUS_LABEL[s.statut] || s.statut;
-    const num  = s.ordre ?? (i + 1);
+    const sc  = STATUS_CLASS[s.statut] || 'todo';
+    const lbl = STATUS_LABEL[s.statut] || s.statut;
+    const num = s.ordre ?? (i + 1);
+
+    // ── Infos magasin ──
+    const notReady = s.magasin_valide === false;
+    const warning  = notReady
+      ? `<div style="margin-top:6px;font-size:11.5px;color:#8A5A12;background:var(--warn-soft);border-radius:8px;padding:3px 10px;display:inline-block;">⏳ En attente de préparation magasin</div>`
+      : '';
+
+    const extras = [];
+    if (s.nombre_colis) {
+      extras.push(`<span style="display:inline-flex;align-items:center;gap:5px;background:var(--turquoise-soft);color:var(--turquoise-dark);border-radius:99px;padding:2px 10px;font-size:11.5px;font-weight:600;">${esc(String(s.nombre_colis))} colis</span>`);
+    }
+    if (s.emplacement) {
+      extras.push(`<span style="font-size:11.5px;color:var(--ink-mute);">${esc(s.emplacement)}</span>`);
+    }
+    if (s.photo_url) {
+      extras.push(`<button onclick="event.stopPropagation();openPhotoModal('${s.id}')" style="display:inline-flex;align-items:center;gap:5px;background:var(--canvas);border:1px solid var(--line);border-radius:8px;padding:3px 10px;font:600 11.5px 'Inter',sans-serif;color:var(--ink-soft);cursor:pointer;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13" r="4" stroke="currentColor" stroke-width="2"/></svg>Photo</button>`);
+    }
+
+    const magasinSection = (warning || extras.length)
+      ? `<div style="margin-top:8px;display:flex;flex-wrap:wrap;align-items:center;gap:6px;">${warning}${extras.join('')}</div>`
+      : '';
+
     return `
     <div class="stop-card" onclick="openSheet('${s.id}')">
       <div class="stop-num ${sc}">${num}</div>
@@ -83,6 +104,7 @@ function renderStopsList() {
           ${s.numero_affaire ? `N° ${esc(s.numero_affaire)}` : ''}
           ${s.telephone ? ` · <a href="tel:${esc(s.telephone)}" onclick="event.stopPropagation()">${esc(s.telephone)}</a>` : ''}
         </div>
+        ${magasinSection}
       </div>
       <div class="stop-status"><span class="pill ${sc}">${lbl}</span></div>
     </div>`;
@@ -96,7 +118,7 @@ function renderMap(stopsData) {
   const located = stopsData.filter(s => s.latitude && s.longitude);
   const center  = located.length
     ? { lat: located[0].latitude, lng: located[0].longitude }
-    : { lat: 43.3, lng: 5.9 }; // Toulon area default
+    : { lat: 43.3, lng: 5.9 };
 
   map = new google.maps.Map(document.getElementById('livreur-map'), {
     center,
@@ -114,29 +136,16 @@ function renderMap(stopsData) {
 
   stopsData.forEach((s, i) => {
     if (!s.latitude || !s.longitude) return;
-    const pos = { lat: s.latitude, lng: s.longitude };
+    const pos   = { lat: s.latitude, lng: s.longitude };
     bounds.extend(pos);
-
-    const sc = STATUS_CLASS[s.statut] || 'todo';
+    const sc    = STATUS_CLASS[s.statut] || 'todo';
     const color = { done: '#3DBE7A', now: '#F2A93B', todo: '#9AA3AD' }[sc];
 
     const marker = new google.maps.Marker({
       position: pos,
       map,
-      label: {
-        text: String(s.ordre ?? (i + 1)),
-        color: '#fff',
-        fontWeight: '700',
-        fontSize: '12px',
-      },
-      icon: {
-        path: google.maps.SymbolPath.CIRCLE,
-        scale: 14,
-        fillColor: color,
-        fillOpacity: 1,
-        strokeColor: '#fff',
-        strokeWeight: 2,
-      },
+      label: { text: String(s.ordre ?? (i + 1)), color: '#fff', fontWeight: '700', fontSize: '12px' },
+      icon:  { path: google.maps.SymbolPath.CIRCLE, scale: 14, fillColor: color, fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2 },
       title: s.societe,
     });
 
@@ -144,9 +153,7 @@ function renderMap(stopsData) {
     markers.push(marker);
   });
 
-  if (located.length > 1) {
-    map.fitBounds(bounds, { padding: 40 });
-  }
+  if (located.length > 1) map.fitBounds(bounds, { padding: 40 });
 }
 
 // ── Stop detail sheet ─────────────────────────────────────────
@@ -181,10 +188,10 @@ function closeSheet() {
 function renderStatusActions(stop) {
   const container = document.getElementById('status-actions');
   const transitions = {
-    A_LIVRER:  [{ statut: 'EN_COURS', label: 'Démarrer la livraison', cls: 'active-now' }],
-    EN_COURS:  [{ statut: 'LIVRE',    label: 'Marquer comme livré',   cls: 'active-done' },
-                { statut: 'A_LIVRER', label: 'Remettre en attente',   cls: '' }],
-    LIVRE:     [],
+    A_LIVRER: [{ statut: 'EN_COURS', label: 'Démarrer la livraison', cls: 'active-now' }],
+    EN_COURS: [{ statut: 'LIVRE',    label: 'Marquer comme livré',   cls: 'active-done' },
+               { statut: 'A_LIVRER', label: 'Remettre en attente',   cls: '' }],
+    LIVRE:    [],
   };
   const actions = transitions[stop.statut] || [];
 
@@ -207,13 +214,11 @@ async function changeStatus(id, newStatut) {
     });
     if (!res.ok) throw new Error();
     const updated = await res.json();
-    // Mettre à jour localement
     const idx = stops.findIndex(s => s.id === id);
     if (idx !== -1) stops[idx] = updated;
     renderStopsList();
     updateSummary();
     updateMapMarker(updated);
-    // Rafraîchir le sheet
     const sc  = STATUS_CLASS[updated.statut] || 'todo';
     const lbl = STATUS_LABEL[updated.statut] || updated.statut;
     document.getElementById('sheet-statut-current').innerHTML = `<span class="pill ${sc}">${lbl}</span>`;
@@ -229,105 +234,32 @@ function updateMapMarker(stop) {
   if (i === -1 || !markers[i]) return;
   const sc    = STATUS_CLASS[stop.statut] || 'todo';
   const color = { done: '#3DBE7A', now: '#F2A93B', todo: '#9AA3AD' }[sc];
-  markers[i].setIcon({
-    path: google.maps.SymbolPath.CIRCLE,
-    scale: 14,
-    fillColor: color,
-    fillOpacity: 1,
-    strokeColor: '#fff',
-    strokeWeight: 2,
-  });
+  markers[i].setIcon({ path: google.maps.SymbolPath.CIRCLE, scale: 14, fillColor: color, fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2 });
 }
 
-// ── Add stop sheet ────────────────────────────────────────────
-function openAddSheet() {
-  // Fermer le sheet de détail si ouvert
-  closeSheet();
-  ['add-societe', 'add-adresse', 'add-affaire', 'add-tel'].forEach(id => {
-    document.getElementById(id).value = '';
-  });
-  document.getElementById('add-error').style.display = 'none';
-  document.getElementById('add-submit-btn').disabled = false;
-  document.getElementById('add-overlay').classList.add('open');
-  document.getElementById('add-sheet').classList.add('open');
-  setTimeout(() => document.getElementById('add-societe').focus(), 350);
-}
+// ── Photo modal ───────────────────────────────────────────────
+function openPhotoModal(id) {
+  const stop = stops.find(s => s.id === id);
+  if (!stop || !stop.photo_url) return;
 
-function closeAddSheet() {
-  document.getElementById('add-overlay').classList.remove('open');
-  document.getElementById('add-sheet').classList.remove('open');
-}
+  document.getElementById('photo-img').src = stop.photo_url;
 
-async function submitAddStop() {
-  const societe  = document.getElementById('add-societe').value.trim();
-  const adresse  = document.getElementById('add-adresse').value.trim();
-  const affaire  = document.getElementById('add-affaire').value.trim();
-  const tel      = document.getElementById('add-tel').value.trim();
-  const errEl    = document.getElementById('add-error');
-  const btn      = document.getElementById('add-submit-btn');
-
-  errEl.style.display = 'none';
-
-  if (!societe || !adresse) {
-    errEl.textContent = 'La société et l\'adresse sont obligatoires.';
-    errEl.style.display = 'block';
-    return;
+  if (stop.magasin_valide_at) {
+    const expiresAt = new Date(new Date(stop.magasin_valide_at).getTime() + 30 * 24 * 60 * 60 * 1000);
+    document.getElementById('photo-notice').textContent =
+      `Supprimée automatiquement le ${expiresAt.toLocaleDateString('fr-FR')}`;
+  } else {
+    document.getElementById('photo-notice').textContent = 'Supprimée automatiquement après 30 jours';
   }
 
-  btn.disabled = true;
-  btn.textContent = 'Ajout en cours…';
+  document.getElementById('photo-overlay').classList.add('open');
+  document.getElementById('photo-sheet').classList.add('open');
+}
 
-  try {
-    const res = await fetch('/api/stops', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        societe,
-        adresse,
-        telephone:      tel     || null,
-        numero_affaire: affaire || null,
-        type:           'ATRIAL',
-        ordre:          99,
-      }),
-    });
-
-    if (!res.ok) {
-      const d = await res.json();
-      errEl.textContent = d.error || 'Erreur serveur. Réessayez.';
-      errEl.style.display = 'block';
-      return;
-    }
-
-    const newStop = await res.json();
-    stops.push(newStop);
-    window._stops = stops;
-    closeAddSheet();
-    renderStopsList();
-    updateSummary();
-    if (map) renderMap(stops);
-
-    // Feedback visuel bref
-    const feedback = document.createElement('div');
-    feedback.textContent = `✓ ${societe} ajouté à votre tournée`;
-    Object.assign(feedback.style, {
-      position: 'fixed', bottom: '90px', left: '50%',
-      transform: 'translateX(-50%)',
-      background: 'var(--turquoise)', color: '#fff',
-      padding: '10px 20px', borderRadius: '99px',
-      fontSize: '13px', fontWeight: '600',
-      zIndex: '100', whiteSpace: 'nowrap',
-      boxShadow: '0 4px 14px rgba(75,191,191,.4)',
-    });
-    document.body.appendChild(feedback);
-    setTimeout(() => feedback.remove(), 3000);
-
-  } catch {
-    errEl.textContent = 'Erreur réseau. Vérifiez votre connexion.';
-    errEl.style.display = 'block';
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg> Ajouter le stop';
-  }
+function closePhotoModal() {
+  document.getElementById('photo-overlay').classList.remove('open');
+  document.getElementById('photo-sheet').classList.remove('open');
+  document.getElementById('photo-img').src = '';
 }
 
 // ── Utils ─────────────────────────────────────────────────────

@@ -1,7 +1,10 @@
 .env
+.env.local
 node_modules/
 .vercel/
 *.log
 .DS_Store
 .claude/
 supabase/.temp/
+key.txt
+*.key.txt

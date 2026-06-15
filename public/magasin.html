@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>LIVRIAL — Magasin</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    body { background: var(--canvas); }
+
+    /* Compteurs magasin — même style que .summary-strip livreur */
+    .magasin-counts {
+      background: var(--bg); border-bottom: 1px solid var(--line);
+      display: flex; padding: 12px 20px; gap: 0;
+    }
+    .cnt-item { flex: 1; display: flex; flex-direction: column; gap: 2px; position: relative; }
+    .cnt-item + .cnt-item { padding-left: 14px; }
+    .cnt-item + .cnt-item::before {
+      content: ''; position: absolute; left: 0; top: 4px; bottom: 4px;
+      width: 1px; background: var(--line);
+    }
+    .cnt-label { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--ink-mute); font-weight: 600; }
+    .cnt-value { font-size: 15px; font-weight: 700; }
+    .cnt-value.teal   { color: var(--turquoise); }
+    .cnt-value.orange { color: var(--warn); }
+
+    /* Stop cards magasin */
+    .stops-list { flex: 1; overflow-y: auto; padding: 12px 16px 40px; display: flex; flex-direction: column; gap: 10px; }
+
+    .stop-card-magasin {
+      background: var(--bg); border: 1px solid var(--line);
+      border-radius: 14px; padding: 14px 16px; cursor: pointer;
+      display: flex; align-items: flex-start; gap: 14px;
+      transition: box-shadow .15s;
+    }
+    .stop-card-magasin:hover { box-shadow: 0 4px 16px rgba(0,0,0,.08); }
+
+    .stop-num-mag {
+      width: 30px; height: 30px; border-radius: 50%;
+      font-size: 13px; font-weight: 700; color: #fff;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .stop-num-mag.ready  { background: var(--turquoise); }
+    .stop-num-mag.prep   { background: var(--warn); }
+    .stop-num-mag.done   { background: var(--ink-mute); }
+
+    .stop-body { flex: 1; min-width: 0; }
+    .stop-name { font-size: 14px; font-weight: 700; }
+    .stop-addr { font-size: 12px; color: var(--ink-soft); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .stop-meta { font-size: 11.5px; color: var(--ink-mute); margin-top: 4px; }
+
+    .stop-footer { margin-top: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+    /* Badge statut magasin */
+    .mag-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 10px 3px 8px; border-radius: 99px;
+      font-size: 11px; font-weight: 600; white-space: nowrap;
+    }
+    .mag-badge::before { content: ''; width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .mag-badge.a-preparer { color: var(--status-todo-fg); background: var(--status-todo-bg); }
+    .mag-badge.a-preparer::before { background: var(--status-todo-dot); }
+    .mag-badge.en-cours   { color: var(--status-now-fg);  background: var(--status-now-bg); }
+    .mag-badge.en-cours::before   { background: var(--status-now-dot); }
+    .mag-badge.pret       { color: var(--status-done-fg); background: var(--status-done-bg); }
+    .mag-badge.pret::before       { background: var(--status-done-dot); }
+
+    /* Pill colis+emplacement */
+    .colis-pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: var(--turquoise-soft); color: var(--turquoise-dark);
+      border-radius: 99px; padding: 3px 12px;
+      font-size: 12px; font-weight: 600;
+    }
+
+    /* Bouton préparer */
+    .btn-preparer {
+      height: 34px; padding: 0 16px; border-radius: 99px;
+      background: var(--side-bg); color: #fff;
+      border: 0; font: 600 12.5px 'Inter', sans-serif; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 7px;
+    }
+
+    /* Fiche préparation (bottom sheet) */
+    .prep-sheet {
+      position: fixed; left: 0; right: 0; bottom: 0;
+      background: var(--bg);
+      border-radius: 24px 24px 0 0;
+      padding: 10px 20px 40px;
+      max-height: 94vh; overflow-y: auto;
+      transform: translateY(100%);
+      transition: transform .3s cubic-bezier(.2,.7,.2,1);
+      z-index: 51;
+      box-shadow: 0 -10px 30px rgba(0,0,0,.12);
+    }
+    .prep-sheet.open { transform: translateY(0); }
+
+    .prep-context {
+      background: var(--canvas); border-radius: 12px;
+      padding: 12px 14px; margin-bottom: 20px;
+    }
+    .prep-context .pc-name { font-size: 15px; font-weight: 700; }
+    .prep-context .pc-addr { font-size: 12.5px; color: var(--ink-soft); margin-top: 3px; }
+    .prep-context .pc-meta { font-size: 12px; color: var(--ink-mute); margin-top: 4px; }
+
+    .field label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-mute); margin-bottom: 6px; display: block; }
+    .field input  { width: 100%; height: 46px; border-radius: 12px; border: 1px solid var(--line); padding: 0 14px; font: inherit; font-size: 14px; color: var(--ink); background: var(--bg); outline: none; }
+    .field input:focus { border-color: var(--turquoise); box-shadow: 0 0 0 4px rgba(75,191,191,.15); }
+
+    /* Photo input */
+    .photo-input-zone {
+      border: 2px dashed var(--line);
+      border-radius: 14px; padding: 20px;
+      text-align: center; cursor: pointer;
+      transition: border-color .2s;
+    }
+    .photo-input-zone:hover { border-color: var(--turquoise); }
+    .photo-input-zone input[type="file"] { display: none; }
+    .photo-preview { width: 100%; border-radius: 10px; margin-top: 12px; display: none; }
+    .photo-hint { font-size: 11.5px; color: var(--ink-mute); margin-top: 10px; }
+
+    .btn-valider {
+      width: 100%; height: 54px; border-radius: 14px; border: 0;
+      background: var(--turquoise); color: #fff;
+      font: 700 15px 'Inter', sans-serif; cursor: pointer;
+      margin-top: 20px;
+      box-shadow: 0 6px 18px var(--turquoise-shadow);
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+    }
+    .btn-valider:disabled { opacity: .6; cursor: not-allowed; }
+
+    .prep-error {
+      background: var(--danger-soft); color: #A14444;
+      border-radius: 10px; padding: 10px 14px;
+      font-size: 13px; margin-bottom: 14px; display: none;
+    }
+  </style>
+</head>
+<body>
+
+<div class="livreur-layout">
+
+  <!-- HEADER -->
+  <header class="livreur-header">
+    <div class="brand-left">
+      <img src="/images/atrial-logo.jpeg" alt="Atrial">
+      <div class="brand-meta">
+        <div class="role-label">MAGASIN</div>
+      </div>
+    </div>
+    <div class="brand-right">
+      <div class="app-name">LIVR<span>I</span>AL</div>
+      <div class="today-date" id="today-date"></div>
+    </div>
+  </header>
+
+  <!-- COMPTEURS -->
+  <div class="magasin-counts">
+    <div class="cnt-item">
+      <div class="cnt-label">Total</div>
+      <div class="cnt-value" id="cnt-total"><em style="font-style:normal;color:var(--turquoise)">—</em></div>
+    </div>
+    <div class="cnt-item">
+      <div class="cnt-label">Prêts</div>
+      <div class="cnt-value teal" id="cnt-prets">—</div>
+    </div>
+    <div class="cnt-item">
+      <div class="cnt-label">À préparer</div>
+      <div class="cnt-value orange" id="cnt-apreparer">—</div>
+    </div>
+  </div>
+
+  <!-- STOPS LIST -->
+  <div class="stops-list" id="stops-list">
+    <div style="text-align:center;padding:40px 20px;color:var(--ink-mute);">
+      Chargement…
+    </div>
+  </div>
+
+</div>
+
+<!-- FICHE PRÉPARATION SHEET -->
+<div class="stop-sheet-overlay" id="prep-overlay" onclick="closePrepSheet()"></div>
+<div class="prep-sheet" id="prep-sheet">
+  <div class="sheet-grabber"></div>
+
+  <!-- Contexte du stop -->
+  <div class="prep-context">
+    <div class="pc-name" id="prep-societe"></div>
+    <div class="pc-addr" id="prep-adresse"></div>
+    <div class="pc-meta" id="prep-meta"></div>
+  </div>
+
+  <div class="prep-error" id="prep-error"></div>
+
+  <div class="field" style="margin-bottom:16px">
+    <label>Nombre de colis *</label>
+    <input type="number" id="prep-colis" min="1" placeholder="Ex : 3">
+  </div>
+
+  <div class="field" style="margin-bottom:16px">
+    <label>Emplacement de stockage</label>
+    <input type="text" id="prep-emplacement" placeholder="Ex : Zone B, étagère 3">
+  </div>
+
+  <div class="field" style="margin-bottom:16px">
+    <label>Photo du colissage</label>
+    <div class="photo-input-zone" onclick="document.getElementById('prep-photo-input').click()">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" style="color:var(--ink-mute);margin:0 auto;display:block">
+        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+        <circle cx="12" cy="13" r="4" stroke="currentColor" stroke-width="1.8"/>
+      </svg>
+      <div style="margin-top:10px;font-size:13px;font-weight:600;color:var(--ink-soft)">Prendre une photo</div>
+      <div style="font-size:12px;color:var(--ink-mute);margin-top:4px">Appuyez pour ouvrir l'appareil photo</div>
+      <input type="file" id="prep-photo-input" accept="image/*" capture="environment"
+        onchange="handlePhotoSelected(this)">
+      <img id="prep-photo-preview" class="photo-preview" alt="Aperçu">
+    </div>
+    <div class="photo-hint">Supprimée automatiquement après 30 jours</div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:10px;padding-top:8px">
+    <button onclick="closePrepSheet()"
+      style="height:50px;border-radius:14px;border:1px solid var(--line);background:var(--canvas);font:600 14px 'Inter',sans-serif;color:var(--ink);cursor:pointer;">
+      Annuler
+    </button>
+    <button class="btn-valider" id="prep-submit-btn" onclick="submitPrep()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+        <path d="M20 6L9 17l-5-5" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Valider — colis prêts
+    </button>
+  </div>
+</div>
+
+<script src="/js/magasin.js"></script>
+</body>
+</html>

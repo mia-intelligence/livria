@@ -1,8 +1,9 @@
 {
   "outputDirectory": "public",
   "rewrites": [
-    { "source": "/livreur", "destination": "/livreur.html" },
-    { "source": "/adv",     "destination": "/adv.html" },
-    { "source": "/admin",   "destination": "/admin.html" }
+    { "source": "/livreur",  "destination": "/livreur.html" },
+    { "source": "/adv",      "destination": "/adv.html" },
+    { "source": "/admin",    "destination": "/admin.html" },
+    { "source": "/magasin",  "destination": "/magasin.html" }
   ]
 }

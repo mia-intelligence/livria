@@ -21,6 +21,7 @@ module.exports = async function handler(req, res) {
     if (role === 'LIVREUR') {
       query = query.eq('societe_livraison', 'ATRIAL');
     }
+    // MAGASIN et ADV/ADMIN voient tous les stops
 
     const { data, error } = await query;
     if (error) return res.status(500).json({ error: error.message });
@@ -29,47 +30,65 @@ module.exports = async function handler(req, res) {
 
   // Seuls ADV et ADMIN peuvent créer manuellement des stops
   if (req.method === 'POST') {
-    if (!['ADV', 'ADMIN','LIVREUR'].includes(role)) {
+    if (!['ADV', 'ADMIN', 'LIVREUR'].includes(role)) {
       return res.status(403).json({ error: 'Accès refusé' });
     }
 
     const {
-  numero_affaire,
-  societe,
-  adresse,
-  telephone,
-  societe_livraison,
-  date_tournee,
-  latitude,
-  longitude,
-  ordre
-} = req.body;
-   if (!societe || !adresse || !societe_livraison){
+      numero_affaire,
+      societe,
+      adresse,
+      telephone,
+      societe_livraison,
+      tournee,
+      vehicule,
+      date_tournee,
+      latitude,
+      longitude,
+      ordre,
+    } = req.body;
+
+    if (!societe || !adresse || !societe_livraison) {
       return res.status(400).json({ error: 'societe, adresse et societe_livraison sont requis' });
     }
 
     const VALID_SOCIETES_LIVRAISON = ['ATRIAL', 'ENLEVEMENT', 'TRANSPORTEUR'];
+    if (!VALID_SOCIETES_LIVRAISON.includes(societe_livraison)) {
+      return res.status(400).json({ error: 'societe_livraison invalide' });
+    }
 
-if (!VALID_SOCIETES_LIVRAISON.includes(societe_livraison)) {
-  return res.status(400).json({ error: 'societe_livraison invalide' });
-}
+    const VALID_TOURNEES = [
+      'ENLEVEMENT', 'TOURNEE LUNDI', 'MARDI T06-T83EST',
+      'MERCREDI T13', 'TOURNEE JEUDI', 'VENDREDI T83 OUEST',
+      'LIVRAISON CHANTIER', 'TRANSPORTEUR',
+    ];
+    if (tournee && !VALID_TOURNEES.includes(tournee)) {
+      return res.status(400).json({ error: 'tournee invalide' });
+    }
+
+    const VALID_VEHICULES = ['PL', 'VL'];
+    if (vehicule && !VALID_VEHICULES.includes(vehicule)) {
+      return res.status(400).json({ error: 'vehicule invalide' });
+    }
 
     const { data, error } = await db
-  .from('stops')
-  .insert({
-    societe: societe || null,
-    adresse: adresse || null,
-    telephone: telephone || null,
-    latitude: latitude || null,
-    longitude: longitude || null,
-    numero_affaire: numero_affaire || null,
-    societe_livraison: societe_livraison || 'ATRIAL',
-    statut: 'A_LIVRER',
-    ordre: ordre || 99,
-    date_tournee: date_tournee || new Date().toISOString().split('T')[0],
-  })
-  .select('*')
-.single();
+      .from('stops')
+      .insert({
+        societe:           societe           || null,
+        adresse:           adresse           || null,
+        telephone:         telephone         || null,
+        latitude:          latitude          || null,
+        longitude:         longitude         || null,
+        numero_affaire:    numero_affaire    || null,
+        societe_livraison: societe_livraison || 'ATRIAL',
+        tournee:           tournee           || null,
+        vehicule:          vehicule          || null,
+        statut:            'A_LIVRER',
+        ordre:             ordre             || 99,
+        date_tournee:      date_tournee      || new Date().toISOString().split('T')[0],
+      })
+      .select('*')
+      .single();
 
     if (error) return res.status(500).json({ error: error.message });
     return res.status(201).json(data);

@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
   prenom        TEXT        NOT NULL,
   email         TEXT        NOT NULL UNIQUE,
   password_hash TEXT        NOT NULL,
-  role          TEXT        NOT NULL CHECK (role IN ('LIVREUR', 'ADV', 'ADMIN')),
+  role          TEXT        NOT NULL CHECK (role IN ('LIVREUR', 'ADV', 'ADMIN', 'MAGASIN')),
   actif         BOOLEAN     NOT NULL DEFAULT TRUE,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   last_login    TIMESTAMPTZ
@@ -31,11 +31,35 @@ CREATE TABLE IF NOT EXISTS stops (
   numero_affaire  TEXT,
   type            TEXT        NOT NULL CHECK (type IN ('ATRIAL', 'ENLEVEMENT', 'TRANSPORTEUR')),
   statut          TEXT        NOT NULL DEFAULT 'A_LIVRER' CHECK (statut IN ('A_LIVRER', 'EN_COURS', 'LIVRE')),
-  ordre           INTEGER     NOT NULL DEFAULT 99,
-  date_tournee    DATE        NOT NULL DEFAULT CURRENT_DATE,
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  ordre              INTEGER     NOT NULL DEFAULT 99,
+  date_tournee       DATE        NOT NULL DEFAULT CURRENT_DATE,
+  -- Champs tournée / véhicule (ajoutés V2)
+  tournee            TEXT        CHECK (tournee IS NULL OR tournee = ANY (ARRAY[
+                       'ENLEVEMENT','TOURNEE LUNDI','MARDI T06-T83EST',
+                       'MERCREDI T13','TOURNEE JEUDI','VENDREDI T83 OUEST',
+                       'LIVRAISON CHANTIER','TRANSPORTEUR'
+                     ])),
+  vehicule           TEXT        CHECK (vehicule IS NULL OR vehicule = ANY (ARRAY['PL','VL'])),
+  -- Champs préparation magasin (ajoutés V2)
+  nombre_colis       INTEGER,
+  emplacement        TEXT,
+  photo_url          TEXT,
+  magasin_valide     BOOLEAN     NOT NULL DEFAULT FALSE,
+  magasin_valide_at  TIMESTAMPTZ,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- ── Migration V2 (si table déjà existante) ─────────────────────
+-- ALTER TABLE users ALTER COLUMN role DROP CONSTRAINT users_role_check;
+-- ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('LIVREUR','ADV','ADMIN','MAGASIN'));
+-- ALTER TABLE stops ADD COLUMN IF NOT EXISTS tournee TEXT;
+-- ALTER TABLE stops ADD COLUMN IF NOT EXISTS vehicule TEXT;
+-- ALTER TABLE stops ADD COLUMN IF NOT EXISTS nombre_colis INTEGER;
+-- ALTER TABLE stops ADD COLUMN IF NOT EXISTS emplacement TEXT;
+-- ALTER TABLE stops ADD COLUMN IF NOT EXISTS photo_url TEXT;
+-- ALTER TABLE stops ADD COLUMN IF NOT EXISTS magasin_valide BOOLEAN NOT NULL DEFAULT FALSE;
+-- ALTER TABLE stops ADD COLUMN IF NOT EXISTS magasin_valide_at TIMESTAMPTZ;
 
 -- Index pour les requêtes courantes
 CREATE INDEX IF NOT EXISTS stops_date_idx  ON stops (date_tournee);
