@@ -28,9 +28,9 @@ CREATE TABLE IF NOT EXISTS stops (
   telephone       TEXT,
   latitude        FLOAT,
   longitude       FLOAT,
-  numero_affaire  TEXT,
-  type            TEXT        NOT NULL CHECK (type IN ('ATRIAL', 'ENLEVEMENT', 'TRANSPORTEUR')),
-  statut          TEXT        NOT NULL DEFAULT 'A_LIVRER' CHECK (statut IN ('A_LIVRER', 'EN_COURS', 'LIVRE')),
+  numero_affaire      TEXT,
+  societe_livraison   TEXT        NOT NULL CHECK (societe_livraison IN ('ATRIAL', 'ENLEVEMENT', 'TRANSPORTEUR')),
+  statut              TEXT        NOT NULL DEFAULT 'A_LIVRER' CHECK (statut IN ('A_LIVRER', 'EN_COURS', 'LIVRE')),
   ordre              INTEGER     NOT NULL DEFAULT 99,
   date_tournee       DATE        NOT NULL DEFAULT CURRENT_DATE,
   -- Champs tournée / véhicule (ajoutés V2)
