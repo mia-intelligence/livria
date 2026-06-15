@@ -271,18 +271,19 @@ async function submitPrep() {
 
     // Feedback visuel
     const feedback = document.createElement('div');
-    feedback.textContent = `✓ ${updated.societe} — colis prêts`;
+    feedback.textContent = `✓ ${updated.societe || 'Stop'} — colis prêts !`;
     Object.assign(feedback.style, {
-      position: 'fixed', bottom: '24px', left: '50%',
+      position: 'fixed', bottom: '32px', left: '50%',
       transform: 'translateX(-50%)',
-      background: 'var(--turquoise)', color: '#fff',
-      padding: '10px 20px', borderRadius: '99px',
-      fontSize: '13px', fontWeight: '600',
-      zIndex: '100', whiteSpace: 'nowrap',
-      boxShadow: '0 4px 14px rgba(75,191,191,.4)',
+      background: '#4BBFBF', color: '#fff',
+      padding: '14px 28px', borderRadius: '99px',
+      fontSize: '15px', fontWeight: '700',
+      zIndex: '99999', whiteSpace: 'nowrap',
+      boxShadow: '0 6px 24px rgba(75,191,191,.5)',
+      transition: 'opacity .3s',
     });
     document.body.appendChild(feedback);
-    setTimeout(() => feedback.remove(), 3000);
+    setTimeout(() => { feedback.style.opacity = '0'; setTimeout(() => feedback.remove(), 300); }, 3500);
 
   } catch {
     errEl.textContent   = 'Erreur réseau. Vérifiez votre connexion.';

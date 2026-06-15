@@ -105,15 +105,11 @@ async function loadStops() {
     }
 
     allStops = await res.json();
-    window._stopsLoaded = true;
 
     renderDashboard();
     renderAffaires();
     renderTournee();
-
-    if (window._mapReady) {
-      renderAdvMap();
-    }
+    renderAdvMap();
   } catch (error) {
     console.error('Erreur chargement stops:', error);
   }
@@ -280,13 +276,30 @@ function renderTournee() {
   tbody.innerHTML = filtered.map(s => {
     const societeLivraison = s.societe_livraison || 'ATRIAL';
 
+    // Colonne magasin
+    let magasinCell = '';
+    if (s.magasin_valide) {
+      const colis = s.nombre_colis ? `${s.nombre_colis} colis` : '';
+      const emp   = s.emplacement  ? s.emplacement              : '';
+      const info  = [colis, emp].filter(Boolean).join(' · ');
+      magasinCell = `<span style="display:inline-flex;align-items:center;gap:5px">
+        <span style="width:7px;height:7px;border-radius:50%;background:#3DBE7A;flex-shrink:0"></span>
+        <span style="font-size:12px;color:var(--ink-soft)">${esc(info) || 'Prêt'}</span>
+      </span>`;
+    } else if (s.nombre_colis) {
+      magasinCell = `<span style="font-size:12px;color:#E8A838">En cours</span>`;
+    } else {
+      magasinCell = `<span style="font-size:12px;color:var(--ink-mute)">—</span>`;
+    }
+
     return `
       <tr>
         <td class="strong">${s.ordre ?? '—'}</td>
         <td class="strong">${esc(s.societe)}</td>
-        <td class="muted" style="max-width:240px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.adresse)}</td>
+        <td class="muted" style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.adresse)}</td>
         <td class="muted">${s.numero_affaire ? esc(s.numero_affaire) : '—'}</td>
         <td><span class="type-badge ${societeLivraison.toLowerCase()}">${TYPE_LABEL[societeLivraison] || societeLivraison}</span></td>
+        <td>${magasinCell}</td>
         <td><span class="pill ${STATUS_CLASS[s.statut] || 'todo'}">${STATUS_LABEL[s.statut] || s.statut}</span></td>
         <td>
           ${s.statut !== 'LIVRE' ? `
@@ -321,10 +334,7 @@ async function changeStopStatus(id, newStatut) {
 
     renderDashboard();
     renderTournee();
-
-    if (advMap) {
-      renderAdvMap();
-    }
+    renderAdvMap();
   } catch {
     alert('Erreur lors de la mise à jour.');
     await loadStops();
@@ -406,63 +416,51 @@ async function createStop() {
   }
 }
 
-// ── Google Maps ADV ────────────────────────────────────────────
+// ── Leaflet Map ADV ────────────────────────────────────────────
 function renderAdvMap() {
   const located = allStops.filter(s => s.latitude && s.longitude);
 
-  const center = located.length
-    ? { lat: located[0].latitude, lng: located[0].longitude }
-    : { lat: 43.3, lng: 5.9 };
+  const defaultCenter = [43.3, 5.9];
+  const defaultZoom   = 10;
 
   if (!advMap) {
-    advMap = new google.maps.Map(document.getElementById('adv-map'), {
-      center,
-      zoom: 10,
-      disableDefaultUI: true,
-      zoomControl: true,
-      styles: [{ featureType: 'poi', stylers: [{ visibility: 'off' }] }]
-    });
+    advMap = L.map('adv-map', { zoomControl: true }).setView(defaultCenter, defaultZoom);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap',
+      maxZoom: 18,
+    }).addTo(advMap);
   }
 
   if (window._advMarkers) {
-    window._advMarkers.forEach(m => m.setMap(null));
+    window._advMarkers.forEach(m => advMap.removeLayer(m));
   }
-
   window._advMarkers = [];
 
-  const bounds = new google.maps.LatLngBounds();
+  if (!located.length) return;
+
+  const bounds = [];
 
   located.forEach((s, i) => {
-    const pos = { lat: s.latitude, lng: s.longitude };
     const color = { LIVRE: '#3DBE7A', EN_COURS: '#F2A93B', A_LIVRER: '#9AA3AD' }[s.statut] || '#9AA3AD';
+    const label = String(s.ordre ?? i + 1);
 
-    bounds.extend(pos);
-
-    const m = new google.maps.Marker({
-      position: pos,
-      map: advMap,
-      title: s.societe,
-      label: {
-        text: String(s.ordre ?? i + 1),
-        color: '#fff',
-        fontWeight: '700',
-        fontSize: '11px'
-      },
-      icon: {
-        path: google.maps.SymbolPath.CIRCLE,
-        scale: 13,
-        fillColor: color,
-        fillOpacity: 1,
-        strokeColor: '#fff',
-        strokeWeight: 2
-      }
+    const icon = L.divIcon({
+      className: '',
+      html: `<div style="width:26px;height:26px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff">${label}</div>`,
+      iconSize: [26, 26],
+      iconAnchor: [13, 13],
     });
 
+    const m = L.marker([s.latitude, s.longitude], { icon, title: s.societe }).addTo(advMap);
+    m.bindPopup(`<b>${s.societe}</b><br>${s.adresse}`);
     window._advMarkers.push(m);
+    bounds.push([s.latitude, s.longitude]);
   });
 
-  if (located.length > 1) {
-    advMap.fitBounds(bounds, { padding: 20 });
+  if (bounds.length > 1) {
+    advMap.fitBounds(bounds, { padding: [20, 20] });
+  } else if (bounds.length === 1) {
+    advMap.setView(bounds[0], 13);
   }
 }
 
