@@ -4,12 +4,38 @@ let stops = [];
 let activePrepId = null;
 let selectedPhotoBase64 = null;
 let selectedPhotoType   = null;
+let activeTab = 'today';
 
 // ── Init ──────────────────────────────────────────────────────
 async function init() {
   await checkAuth();
   setTodayDate();
   await loadStops();
+}
+
+// ── Onglets Aujourd'hui / Demain ──────────────────────────────
+function switchTab(tab) {
+  activeTab = tab;
+  const isToday = tab === 'today';
+
+  const btnToday    = document.getElementById('tab-today');
+  const btnTomorrow = document.getElementById('tab-tomorrow');
+
+  btnToday.style.borderBottomColor = isToday ? 'var(--turquoise)' : 'transparent';
+  btnToday.style.color             = isToday ? 'var(--turquoise)' : 'var(--ink-mute)';
+  btnToday.style.fontWeight        = isToday ? '700' : '600';
+
+  btnTomorrow.style.borderBottomColor = !isToday ? 'var(--turquoise)' : 'transparent';
+  btnTomorrow.style.color             = !isToday ? 'var(--turquoise)' : 'var(--ink-mute)';
+  btnTomorrow.style.fontWeight        = !isToday ? '700' : '600';
+
+  loadStops();
+}
+
+function getTabDate() {
+  const d = new Date();
+  if (activeTab === 'tomorrow') d.setDate(d.getDate() + 1);
+  return d.toISOString().split('T')[0];
 }
 
 async function checkAuth() {
@@ -33,7 +59,8 @@ function setTodayDate() {
 // ── Load stops ────────────────────────────────────────────────
 async function loadStops() {
   try {
-    const res = await fetch('/api/stops');
+    const date = getTabDate();
+    const res = await fetch(`/api/stops?date=${date}`);
     if (res.status === 401) { window.location.href = '/'; return; }
     stops = await res.json();
     renderList();
@@ -224,33 +251,14 @@ async function submitPrep() {
   btn.textContent   = 'Validation en cours…';
 
   try {
-    // Upload photo si une nouvelle photo a été sélectionnée
-    if (selectedPhotoBase64) {
-      const photoRes = await fetch('/api/stops/photo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          stop_id:      activePrepId,
-          image:        selectedPhotoBase64,
-          content_type: selectedPhotoType,
-        }),
-      });
-      if (!photoRes.ok) {
-        const d = await photoRes.json();
-        errEl.textContent   = d.error || 'Erreur lors de l\'upload de la photo.';
-        errEl.style.display = 'block';
-        return;
-      }
-    }
-
-    // PATCH le stop : valider magasin
+    // 1. PATCH principal — colis + emplacement + magasin_valide (toujours en premier)
     const patchRes = await fetch(`/api/stops/${activePrepId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        nombre_colis:    parseInt(colisVal, 10),
-        emplacement:     emplacement || null,
-        magasin_valide:  true,
+        nombre_colis:   parseInt(colisVal, 10),
+        emplacement:    emplacement || null,
+        magasin_valide: true,
       }),
     });
 
@@ -264,6 +272,33 @@ async function submitPrep() {
     const updated = await patchRes.json();
     const idx = stops.findIndex(s => s.id === activePrepId);
     if (idx !== -1) stops[idx] = updated;
+
+    // 2. Upload photo — optionnel, non-bloquant
+    if (selectedPhotoBase64) {
+      try {
+        const photoRes = await fetch('/api/stops/photo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            stop_id:      activePrepId,
+            image:        selectedPhotoBase64,
+            content_type: selectedPhotoType,
+          }),
+        });
+        if (photoRes.ok) {
+          const photoData = await photoRes.json();
+          if (idx !== -1) stops[idx].photo_url = photoData.photo_url;
+        } else {
+          const d = await photoRes.json();
+          // Photo échoue → avertissement non-bloquant
+          errEl.textContent   = `⚠ Colis enregistrés mais photo non sauvegardée : ${d.error || 'erreur upload'}`;
+          errEl.style.display = 'block';
+        }
+      } catch {
+        errEl.textContent   = '⚠ Colis enregistrés mais photo non sauvegardée (erreur réseau).';
+        errEl.style.display = 'block';
+      }
+    }
 
     closePrepSheet();
     renderList();
