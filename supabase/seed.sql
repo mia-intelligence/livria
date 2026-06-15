@@ -40,6 +40,14 @@ VALUES
     -- hash de 'Livreur123'
     '$2b$10$oVBf3siXXu/myZL8Z4SON.eIjoTRoo1IShNSGDzMThidOT1RS1zlC',
     'LIVREUR', TRUE
+  ),
+  (
+    uuid_generate_v4(),
+    'Magasin', 'Test',
+    'magasin@atrial.fr',
+    -- hash de 'mag1234'
+    '$2b$10$PGowBYkvjTx0RD2GnmxPU.j7xxXDx6CuhVj1BgDpxzSpsmJVjLe1i',
+    'MAGASIN', TRUE
   )
 ON CONFLICT (email) DO NOTHING;
 
