@@ -344,10 +344,28 @@ function renderTournee() {
   tbody.innerHTML = filtered.map(s => {
     const societeLivraison = s.societe_livraison || 'ATRIAL';
 
-    // Colonne tournée/véhicule
-    const tourneeCell = s.tournee
-      ? `<span style="font-size:12px;font-weight:600;color:var(--ink)">${esc(s.tournee)}</span>${s.vehicule ? `<br><span style="font-size:11px;color:var(--ink-mute)">${esc(s.vehicule)}</span>` : ''}`
-      : `<span style="font-size:12px;color:var(--ink-mute)">—</span>`;
+    // Colonne tournée/véhicule — selects inline éditables
+    const tourneeCell = `
+      <div style="display:flex;flex-direction:column;gap:3px">
+        <select style="border:1px solid var(--line);border-radius:6px;padding:3px 6px;font:inherit;font-size:11px;color:var(--ink);cursor:pointer;max-width:140px"
+          onchange="updateStopField('${s.id}','tournee',this.value)">
+          <option value="">— Tournée —</option>
+          <option value="ENLEVEMENT"        ${s.tournee==='ENLEVEMENT'         ?'selected':''}>Enlèvement</option>
+          <option value="TOURNEE LUNDI"     ${s.tournee==='TOURNEE LUNDI'      ?'selected':''}>Tournée Lundi</option>
+          <option value="MARDI T06-T83EST"  ${s.tournee==='MARDI T06-T83EST'   ?'selected':''}>Mardi T06-T83EST</option>
+          <option value="MERCREDI T13"      ${s.tournee==='MERCREDI T13'        ?'selected':''}>Mercredi T13</option>
+          <option value="TOURNEE JEUDI"     ${s.tournee==='TOURNEE JEUDI'      ?'selected':''}>Tournée Jeudi</option>
+          <option value="VENDREDI T83 OUEST"${s.tournee==='VENDREDI T83 OUEST' ?'selected':''}>Vendredi T83 Ouest</option>
+          <option value="LIVRAISON CHANTIER"${s.tournee==='LIVRAISON CHANTIER' ?'selected':''}>Livraison Chantier</option>
+          <option value="TRANSPORTEUR"      ${s.tournee==='TRANSPORTEUR'        ?'selected':''}>Transporteur</option>
+        </select>
+        <select style="border:1px solid var(--line);border-radius:6px;padding:3px 6px;font:inherit;font-size:11px;color:var(--ink);cursor:pointer;max-width:140px"
+          onchange="updateStopField('${s.id}','vehicule',this.value)">
+          <option value="">— Véhicule —</option>
+          <option value="VL" ${s.vehicule==='VL'?'selected':''}>VL — Véhicule léger</option>
+          <option value="PL" ${s.vehicule==='PL'?'selected':''}>PL — Poids lourd</option>
+        </select>
+      </div>`;
 
     // Colonne magasin
     let magasinCell = '';
@@ -435,6 +453,25 @@ async function changeStopStatus(id, newStatut) {
     renderAdvMap();
   } catch {
     alert('Erreur lors de la mise à jour.');
+    await loadStops();
+  }
+}
+
+async function updateStopField(id, field, value) {
+  try {
+    const res = await fetch(`/api/stops/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [field]: value || null }),
+    });
+    if (!res.ok) throw new Error();
+    const updated = await res.json();
+    const idx = allStops.findIndex(s => s.id === id);
+    if (idx !== -1) allStops[idx] = updated;
+    renderDashboard();
+    renderTournee();
+  } catch {
+    alert('Erreur lors de la mise à jour. Réessayez.');
     await loadStops();
   }
 }
