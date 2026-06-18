@@ -242,7 +242,14 @@ function affaireRowHTML(s, compact) {
         </div>
         ${magasinLine}
       </div>
-      ${!compact ? `<button class="btn sm primary" onclick="openAssignModal('${s.id}')">Planifier</button>` : ''}
+      ${!compact ? (s.magasin_valide
+        ? `<button class="btn sm primary" onclick="openAssignModal('${s.id}')">Planifier</button>`
+        : `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+             <button class="btn sm primary" onclick="openAssignModal('${s.id}')"
+               style="background:var(--warn);border-color:var(--warn)">Planifier</button>
+             <span style="font-size:10px;color:var(--warn);white-space:nowrap">⚠ Magasin non prêt</span>
+           </div>`
+      ) : ''}
     </div>
   `;
 }
@@ -499,10 +506,16 @@ async function changeStopStatus(id, newStatut) {
 
 async function updateStopField(id, field, value) {
   try {
+    const body = { [field]: value || null };
+    if (field === 'tournee') {
+      if (value === 'ENLEVEMENT')   body.societe_livraison = 'ENLEVEMENT';
+      else if (value === 'TRANSPORTEUR') body.societe_livraison = 'TRANSPORTEUR';
+      else if (value)               body.societe_livraison = 'ATRIAL';
+    }
     const res = await fetch(`/api/stops/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ [field]: value || null }),
+      body: JSON.stringify(body),
     });
     if (!res.ok) throw new Error();
     const updated = await res.json();
@@ -519,13 +532,15 @@ async function updateStopField(id, field, value) {
 // ── Nouvelle livraison ADV ────────────────────────────────────
 function openNewStopModal() {
   document.getElementById('new-stop-modal').classList.remove('hidden');
-  document.getElementById('ns-societe').value   = '';
-  document.getElementById('ns-adresse').value   = '';
-  document.getElementById('ns-telephone').value = '';
-  document.getElementById('ns-affaire').value   = '';
-  document.getElementById('ns-type').value      = 'ATRIAL';
-  document.getElementById('ns-tournee').value   = '';
-  document.getElementById('ns-vehicule').value  = '';
+  document.getElementById('ns-societe').value         = '';
+  document.getElementById('ns-adresse').value         = '';
+  document.getElementById('ns-telephone').value       = '';
+  document.getElementById('ns-affaire').value         = '';
+  document.getElementById('ns-type').value            = 'ATRIAL';
+  document.getElementById('ns-tournee').value         = '';
+  document.getElementById('ns-vehicule').value        = '';
+  document.getElementById('ns-type-produit').value    = '';
+  document.getElementById('ns-groupe-livraison').value = '';
   document.getElementById('modal-error').style.display = 'none';
 }
 
@@ -541,6 +556,8 @@ async function createStop() {
   const societe_livraison = document.getElementById('ns-type').value;
   const tournee           = document.getElementById('ns-tournee').value;
   const vehicule          = document.getElementById('ns-vehicule').value;
+  const type_produit      = document.getElementById('ns-type-produit').value || null;
+  const groupe_livraison  = document.getElementById('ns-groupe-livraison').value.trim() || null;
   const errEl             = document.getElementById('modal-error');
 
   errEl.style.display = 'none';
@@ -568,11 +585,13 @@ async function createStop() {
       body: JSON.stringify({
         societe,
         adresse,
-        telephone:      telephone || null,
-        numero_affaire: affaire   || null,
+        telephone:        telephone       || null,
+        numero_affaire:   affaire         || null,
         societe_livraison,
         tournee,
         vehicule,
+        type_produit,
+        groupe_livraison,
       })
     });
 

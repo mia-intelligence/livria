@@ -2,8 +2,9 @@
 
 let stops = [];
 let activePrepId = null;
-let selectedPhotoBase64 = null;
-let selectedPhotoType   = null;
+let pendingPhotos = [];   // {base64, type} — photos à uploader
+let existingPhotos = [];  // {id, photo_url} — photos déjà en DB
+
 let activeTab = 'today';
 
 // ── Init ──────────────────────────────────────────────────────
@@ -107,19 +108,21 @@ function renderList() {
     const ms  = getMagasinStatus(s);
     const num = s.ordre ?? (i + 1);
 
-    // Couleur cercle numéroté
     const numClass = s.statut === 'LIVRE' ? 'done' : ms === 'pret' ? 'ready' : 'prep';
 
-    // Badge statut magasin
     const badge = `<span class="mag-badge ${ms}">${BADGE_LABEL[ms]}</span>`;
 
-    // Partie basse de la card
     let footer = '';
     if (ms === 'pret') {
       const colisLabel = s.nombre_colis ? `${s.nombre_colis} colis` : '';
       const empLabel   = s.emplacement  ? s.emplacement             : '';
       const pillText   = [colisLabel, empLabel].filter(Boolean).join(' · ');
-      footer = `<div class="stop-footer"><span class="colis-pill">${esc(pillText)}</span></div>`;
+      const photoCnt   = (s.stop_photos || []).length;
+      const photoInfo  = photoCnt ? ` · 📷 ${photoCnt}` : '';
+      footer = `<div class="stop-footer">
+        <span class="colis-pill">${esc(pillText)}${photoInfo}</span>
+        ${s.commentaire_magasin ? `<span style="font-size:11.5px;color:var(--ink-soft);margin-top:4px;display:block">💬 ${esc(s.commentaire_magasin)}</span>` : ''}
+      </div>`;
     } else {
       const btnLabel = ms === 'en-cours' ? 'Compléter' : 'Préparer';
       footer = `<div class="stop-footer">
@@ -153,11 +156,10 @@ function renderList() {
 function openPrepSheet(id) {
   const stop = stops.find(s => s.id === id);
   if (!stop) return;
-  activePrepId         = id;
-  selectedPhotoBase64  = null;
-  selectedPhotoType    = null;
+  activePrepId  = id;
+  pendingPhotos = [];
+  existingPhotos = (stop.stop_photos || []).slice();
 
-  // Contexte du stop
   document.getElementById('prep-societe').textContent = stop.societe;
   document.getElementById('prep-adresse').textContent = stop.adresse;
   const meta = [
@@ -166,23 +168,15 @@ function openPrepSheet(id) {
   ].filter(Boolean).join(' · ');
   document.getElementById('prep-meta').textContent = meta;
 
-  // Pré-remplir si données existantes
   document.getElementById('prep-colis').value       = stop.nombre_colis || '';
   document.getElementById('prep-emplacement').value = stop.emplacement  || '';
+  document.getElementById('prep-commentaire').value = stop.commentaire_magasin || '';
 
-  // Reset photo
   document.getElementById('prep-photo-input').value = '';
-  const preview = document.getElementById('prep-photo-preview');
-  if (stop.photo_url) {
-    preview.src          = stop.photo_url;
-    preview.style.display = 'block';
-  } else {
-    preview.style.display = 'none';
-    preview.src           = '';
-  }
-
   document.getElementById('prep-error').style.display = 'none';
   document.getElementById('prep-submit-btn').disabled = false;
+
+  renderPhotosGrid();
 
   document.getElementById('prep-overlay').classList.add('open');
   document.getElementById('prep-sheet').classList.add('open');
@@ -193,9 +187,34 @@ function openPrepSheet(id) {
 function closePrepSheet() {
   document.getElementById('prep-overlay').classList.remove('open');
   document.getElementById('prep-sheet').classList.remove('open');
-  activePrepId        = null;
-  selectedPhotoBase64 = null;
-  selectedPhotoType   = null;
+  activePrepId   = null;
+  pendingPhotos  = [];
+  existingPhotos = [];
+}
+
+// ── Galerie photos ────────────────────────────────────────────
+function renderPhotosGrid() {
+  const grid = document.getElementById('prep-photos-grid');
+
+  const existingHtml = existingPhotos.map((p, i) => `
+    <div class="photo-thumb-wrap">
+      <img src="${esc(p.photo_url)}" alt="Photo ${i + 1}">
+    </div>
+  `).join('');
+
+  const pendingHtml = pendingPhotos.map((p, i) => `
+    <div class="photo-thumb-wrap">
+      <img src="${esc(p.base64)}" alt="Nouvelle photo ${i + 1}">
+      <button class="photo-thumb-del" onclick="removePendingPhoto(${i})" title="Supprimer">×</button>
+    </div>
+  `).join('');
+
+  grid.innerHTML = existingHtml + pendingHtml;
+}
+
+function removePendingPhoto(index) {
+  pendingPhotos.splice(index, 1);
+  renderPhotosGrid();
 }
 
 // ── Sélection photo ───────────────────────────────────────────
@@ -203,9 +222,6 @@ function handlePhotoSelected(input) {
   const file = input.files[0];
   if (!file) return;
 
-  const preview = document.getElementById('prep-photo-preview');
-
-  // Compresser + convertir en base64 via canvas
   const reader = new FileReader();
   reader.onload = (e) => {
     const img = new Image();
@@ -222,10 +238,9 @@ function handlePhotoSelected(input) {
       canvas.height = h;
       canvas.getContext('2d').drawImage(img, 0, 0, w, h);
       const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
-      selectedPhotoBase64 = dataUrl;
-      selectedPhotoType   = 'image/jpeg';
-      preview.src          = dataUrl;
-      preview.style.display = 'block';
+      pendingPhotos.push({ base64: dataUrl, type: 'image/jpeg' });
+      input.value = '';
+      renderPhotosGrid();
     };
     img.src = e.target.result;
   };
@@ -234,10 +249,11 @@ function handlePhotoSelected(input) {
 
 // ── Soumettre la préparation ──────────────────────────────────
 async function submitPrep() {
-  const colisVal     = document.getElementById('prep-colis').value.trim();
-  const emplacement  = document.getElementById('prep-emplacement').value.trim();
-  const errEl        = document.getElementById('prep-error');
-  const btn          = document.getElementById('prep-submit-btn');
+  const colisVal    = document.getElementById('prep-colis').value.trim();
+  const emplacement = document.getElementById('prep-emplacement').value.trim();
+  const commentaire = document.getElementById('prep-commentaire').value.trim();
+  const errEl       = document.getElementById('prep-error');
+  const btn         = document.getElementById('prep-submit-btn');
 
   errEl.style.display = 'none';
 
@@ -247,18 +263,19 @@ async function submitPrep() {
     return;
   }
 
-  btn.disabled      = true;
-  btn.textContent   = 'Validation en cours…';
+  btn.disabled    = true;
+  btn.textContent = 'Validation en cours…';
 
   try {
-    // 1. PATCH principal — colis + emplacement + magasin_valide (toujours en premier)
+    // 1. PATCH principal
     const patchRes = await fetch(`/api/stops/${activePrepId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        nombre_colis:   parseInt(colisVal, 10),
-        emplacement:    emplacement || null,
-        magasin_valide: true,
+        nombre_colis:        parseInt(colisVal, 10),
+        emplacement:         emplacement || null,
+        commentaire_magasin: commentaire || null,
+        magasin_valide:      true,
       }),
     });
 
@@ -271,40 +288,44 @@ async function submitPrep() {
 
     const updated = await patchRes.json();
     const idx = stops.findIndex(s => s.id === activePrepId);
-    if (idx !== -1) stops[idx] = updated;
+    if (idx !== -1) stops[idx] = { ...updated, stop_photos: stops[idx].stop_photos || [] };
 
-    // 2. Upload photo — optionnel, non-bloquant
-    if (selectedPhotoBase64) {
+    // 2. Upload photos en attente
+    let photoErrors = 0;
+    for (const photo of pendingPhotos) {
       try {
         const photoRes = await fetch('/api/stops/photo', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             stop_id:      activePrepId,
-            image:        selectedPhotoBase64,
-            content_type: selectedPhotoType,
+            image:        photo.base64,
+            content_type: photo.type,
           }),
         });
         if (photoRes.ok) {
           const photoData = await photoRes.json();
-          if (idx !== -1) stops[idx].photo_url = photoData.photo_url;
+          if (idx !== -1) {
+            if (!stops[idx].stop_photos) stops[idx].stop_photos = [];
+            stops[idx].stop_photos.push({ photo_url: photoData.photo_url });
+          }
         } else {
-          const d = await photoRes.json();
-          // Photo échoue → avertissement non-bloquant
-          errEl.textContent   = `⚠ Colis enregistrés mais photo non sauvegardée : ${d.error || 'erreur upload'}`;
-          errEl.style.display = 'block';
+          photoErrors++;
         }
       } catch {
-        errEl.textContent   = '⚠ Colis enregistrés mais photo non sauvegardée (erreur réseau).';
-        errEl.style.display = 'block';
+        photoErrors++;
       }
+    }
+
+    if (photoErrors > 0) {
+      errEl.textContent   = `⚠ Colis enregistrés mais ${photoErrors} photo(s) non sauvegardée(s).`;
+      errEl.style.display = 'block';
     }
 
     closePrepSheet();
     renderList();
     updateCounts();
 
-    // Feedback visuel
     const feedback = document.createElement('div');
     feedback.textContent = `✓ ${updated.societe || 'Stop'} — colis prêts !`;
     Object.assign(feedback.style, {

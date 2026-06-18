@@ -16,7 +16,6 @@ module.exports = async function handler(req, res) {
   const db      = getDB();
   const adminDb = getAdminDB();
 
-  // Récupérer infos du stop pour construire le nom de fichier
   const { data: stop, error: stopErr } = await db
     .from('stops')
     .select('numero_affaire, date_tournee')
@@ -25,13 +24,12 @@ module.exports = async function handler(req, res) {
 
   if (stopErr || !stop) return res.status(404).json({ error: 'Stop introuvable' });
 
-  const timestamp     = Date.now();
-  const affaire       = (stop.numero_affaire || 'SANS-AFFAIRE').replace(/[^a-zA-Z0-9-]/g, '_');
-  const dateTournee   = (stop.date_tournee || new Date().toISOString().split('T')[0]).replace(/-/g, '');
-  const ext           = (content_type || 'image/jpeg').includes('png') ? 'png' : 'jpg';
-  const fileName      = `${affaire}_${dateTournee}_${timestamp}.${ext}`;
+  const timestamp   = Date.now();
+  const affaire     = (stop.numero_affaire || 'SANS-AFFAIRE').replace(/[^a-zA-Z0-9-]/g, '_');
+  const dateTournee = (stop.date_tournee || new Date().toISOString().split('T')[0]).replace(/-/g, '');
+  const ext         = (content_type || 'image/jpeg').includes('png') ? 'png' : 'jpg';
+  const fileName    = `${affaire}_${dateTournee}_${timestamp}.${ext}`;
 
-  // Décoder le base64
   let buffer;
   try {
     const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
@@ -40,7 +38,6 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: 'Image base64 invalide' });
   }
 
-  // Upload vers Supabase Storage
   const { error: uploadErr } = await adminDb.storage
     .from('livraisons-photos')
     .upload(fileName, buffer, {
@@ -50,7 +47,6 @@ module.exports = async function handler(req, res) {
 
   if (uploadErr) return res.status(500).json({ error: uploadErr.message });
 
-  // URL signée valable 30 jours
   const THIRTY_DAYS = 30 * 24 * 60 * 60;
   const { data: signedData, error: signErr } = await adminDb.storage
     .from('livraisons-photos')
@@ -60,13 +56,18 @@ module.exports = async function handler(req, res) {
 
   const photoUrl = signedData.signedUrl;
 
-  // Mettre à jour le stop
-  const { error: updateErr } = await db
+  // Insert into stop_photos table
+  const { error: insertErr } = await db
+    .from('stop_photos')
+    .insert({ stop_id, photo_url: photoUrl });
+
+  if (insertErr) return res.status(500).json({ error: insertErr.message });
+
+  // Keep stop.photo_url pointing to latest photo (backward compat)
+  await db
     .from('stops')
     .update({ photo_url: photoUrl, updated_at: new Date().toISOString() })
     .eq('id', stop_id);
-
-  if (updateErr) return res.status(500).json({ error: updateErr.message });
 
   return res.status(200).json({ photo_url: photoUrl });
 };

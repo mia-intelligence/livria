@@ -10,7 +10,7 @@ module.exports = async function handler(req, res) {
   const role = session.users.role;
 
   if (req.method === 'GET') {
-    const { data, error } = await db.from('stops').select('*').eq('id', id).single();
+    const { data, error } = await db.from('stops').select('*, stop_photos(id, photo_url, created_at)').eq('id', id).single();
     if (error || !data) return res.status(404).json({ error: 'Stop introuvable' });
 
     // Livreur : seulement les stops ATRIAL
@@ -21,7 +21,7 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === 'PATCH') {
-    const { statut, ordre, tournee, vehicule, nombre_colis, emplacement, photo_url, magasin_valide, magasin_valide_at } = req.body;
+    const { statut, ordre, tournee, vehicule, nombre_colis, emplacement, photo_url, magasin_valide, magasin_valide_at, commentaire_magasin, livreur_colis_confirme, type_produit, groupe_livraison } = req.body;
     const VALID_STATUTS  = ['A_LIVRER', 'EN_COURS', 'LIVRE'];
     const VALID_TOURNEES = ['ENLEVEMENT','TOURNEE LUNDI','MARDI T06-T83EST','MERCREDI T13','TOURNEE JEUDI','VENDREDI T83 OUEST','LIVRAISON CHANTIER','TRANSPORTEUR'];
     const VALID_VEHICULES = ['PL', 'VL'];
@@ -62,13 +62,31 @@ module.exports = async function handler(req, res) {
 
     // Champs magasin — seul le rôle MAGASIN (et ADMIN) peut les modifier
     if (['MAGASIN', 'ADMIN'].includes(role)) {
-      if (nombre_colis !== undefined) updates.nombre_colis = nombre_colis;
-      if (emplacement !== undefined)  updates.emplacement  = emplacement;
-      if (photo_url !== undefined)    updates.photo_url    = photo_url;
+      if (nombre_colis !== undefined)          updates.nombre_colis          = nombre_colis;
+      if (emplacement !== undefined)           updates.emplacement           = emplacement;
+      if (photo_url !== undefined)             updates.photo_url             = photo_url;
+      if (commentaire_magasin !== undefined)   updates.commentaire_magasin   = commentaire_magasin;
       if (magasin_valide !== undefined) {
         updates.magasin_valide = magasin_valide;
         updates.magasin_valide_at = magasin_valide ? (magasin_valide_at || new Date().toISOString()) : null;
       }
+    }
+
+    // Confirmation colis livreur
+    if (livreur_colis_confirme !== undefined && ['LIVREUR', 'ADMIN'].includes(role)) {
+      updates.livreur_colis_confirme = livreur_colis_confirme;
+    }
+
+    // Type produit et groupe livraison — ADV/ADMIN
+    if (['ADV', 'ADMIN'].includes(role)) {
+      if (type_produit !== undefined) {
+        const VALID_TYPES = ['PVC', 'ALU', 'MIXTE'];
+        if (type_produit !== null && !VALID_TYPES.includes(type_produit)) {
+          return res.status(400).json({ error: 'type_produit invalide' });
+        }
+        updates.type_produit = type_produit;
+      }
+      if (groupe_livraison !== undefined) updates.groupe_livraison = groupe_livraison;
     }
 
     if (!Object.keys(updates).length) {
@@ -81,7 +99,7 @@ module.exports = async function handler(req, res) {
       .from('stops')
       .update(updates)
       .eq('id', id)
-      .select()
+      .select('*, stop_photos(id, photo_url, created_at)')
       .single();
 
     if (error) return res.status(500).json({ error: error.message });

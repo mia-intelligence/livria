@@ -13,22 +13,19 @@ module.exports = async function handler(req, res) {
 
     let query = db
       .from('stops')
-      .select('*')
+      .select('*, stop_photos(id, photo_url, created_at)')
       .eq('date_tournee', date)
       .order('ordre', { ascending: true });
 
-    // Le livreur ne voit que les stops ATRIAL
     if (role === 'LIVREUR') {
       query = query.eq('societe_livraison', 'ATRIAL');
     }
-    // MAGASIN et ADV/ADMIN voient tous les stops
 
     const { data, error } = await query;
     if (error) return res.status(500).json({ error: error.message });
     return res.status(200).json(data);
   }
 
-  // Seuls ADV et ADMIN peuvent créer manuellement des stops
   if (req.method === 'POST') {
     if (!['ADV', 'ADMIN', 'LIVREUR'].includes(role)) {
       return res.status(403).json({ error: 'Accès refusé' });
@@ -46,6 +43,8 @@ module.exports = async function handler(req, res) {
       latitude,
       longitude,
       ordre,
+      type_produit,
+      groupe_livraison,
     } = req.body;
 
     if (!societe || !adresse || !societe_livraison) {
@@ -71,6 +70,11 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: 'vehicule invalide' });
     }
 
+    const VALID_TYPES = ['PVC', 'ALU', 'MIXTE'];
+    if (type_produit && !VALID_TYPES.includes(type_produit)) {
+      return res.status(400).json({ error: 'type_produit invalide' });
+    }
+
     const { data, error } = await db
       .from('stops')
       .insert({
@@ -86,8 +90,10 @@ module.exports = async function handler(req, res) {
         statut:            'A_LIVRER',
         ordre:             ordre             || 99,
         date_tournee:      date_tournee      || new Date().toISOString().split('T')[0],
+        type_produit:      type_produit      || null,
+        groupe_livraison:  groupe_livraison  || null,
       })
-      .select('*')
+      .select('*, stop_photos(id, photo_url, created_at)')
       .single();
 
     if (error) return res.status(500).json({ error: error.message });

@@ -61,6 +61,22 @@ CREATE TABLE IF NOT EXISTS stops (
 -- ALTER TABLE stops ADD COLUMN IF NOT EXISTS magasin_valide BOOLEAN NOT NULL DEFAULT FALSE;
 -- ALTER TABLE stops ADD COLUMN IF NOT EXISTS magasin_valide_at TIMESTAMPTZ;
 
+-- ── Migration V3 (multi-photos, commentaire, confirmation colis, PVC/ALU) ──
+-- Exécuter dans l'éditeur SQL Supabase :
+--
+-- CREATE TABLE IF NOT EXISTS stop_photos (
+--   id         UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+--   stop_id    UUID        NOT NULL REFERENCES stops(id) ON DELETE CASCADE,
+--   photo_url  TEXT        NOT NULL,
+--   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+-- );
+-- CREATE INDEX IF NOT EXISTS stop_photos_stop_idx ON stop_photos (stop_id);
+--
+-- ALTER TABLE stops ADD COLUMN IF NOT EXISTS commentaire_magasin TEXT;
+-- ALTER TABLE stops ADD COLUMN IF NOT EXISTS livreur_colis_confirme BOOLEAN NOT NULL DEFAULT FALSE;
+-- ALTER TABLE stops ADD COLUMN IF NOT EXISTS type_produit TEXT CHECK (type_produit IS NULL OR type_produit = ANY (ARRAY['PVC','ALU','MIXTE']));
+-- ALTER TABLE stops ADD COLUMN IF NOT EXISTS groupe_livraison TEXT;
+
 -- Index pour les requêtes courantes
 CREATE INDEX IF NOT EXISTS stops_date_idx  ON stops (date_tournee);
 CREATE INDEX IF NOT EXISTS stops_type_idx  ON stops (type);

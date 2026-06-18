@@ -4,9 +4,11 @@ let stops = [];
 let map = null;
 let markers = [];
 let activeStopId = null;
+let photoGallery = [];  // photos du stop actif pour le modal
+let photoGalleryIndex = 0;
 
-const STATUS_LABEL     = { A_LIVRER: 'À livrer', EN_COURS: 'En cours', LIVRE: 'Livré' };
-const STATUS_CLASS     = { A_LIVRER: 'todo',     EN_COURS: 'now',      LIVRE: 'done' };
+const STATUS_LABEL = { A_LIVRER: 'À livrer', EN_COURS: 'En cours', LIVRE: 'Livré' };
+const STATUS_CLASS = { A_LIVRER: 'todo',     EN_COURS: 'now',      LIVRE: 'done' };
 
 // ── Init ──────────────────────────────────────────────────────
 async function init() {
@@ -68,12 +70,33 @@ function renderStopsList() {
     return;
   }
 
+  // Grouper visuellement les stops liés (même groupe_livraison)
+  const groupMap = {};
+  stops.forEach(s => {
+    if (s.groupe_livraison) {
+      if (!groupMap[s.groupe_livraison]) groupMap[s.groupe_livraison] = [];
+      groupMap[s.groupe_livraison].push(s.id);
+    }
+  });
+
   container.innerHTML = stops.map((s, i) => {
     const sc  = STATUS_CLASS[s.statut] || 'todo';
     const lbl = STATUS_LABEL[s.statut] || s.statut;
     const num = s.ordre ?? (i + 1);
 
-    // ── Infos magasin ──
+    // Badge type produit (PVC/ALU)
+    const typeBadge = s.type_produit
+      ? `<span style="display:inline-flex;align-items:center;background:${s.type_produit === 'PVC' ? '#E8F4FD' : '#FDF0E8'};color:${s.type_produit === 'PVC' ? '#1A6FA8' : '#A85A1A'};border-radius:6px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:4px">${esc(s.type_produit)}</span>`
+      : '';
+
+    // Indicateur groupe livraison
+    const groupIds = s.groupe_livraison ? (groupMap[s.groupe_livraison] || []) : [];
+    const isGrouped = groupIds.length > 1;
+    const groupBadge = isGrouped
+      ? `<span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--ink-mute);margin-left:6px">🔗 Livraison groupée</span>`
+      : '';
+
+    // Info magasin
     const notReady = s.magasin_valide === false;
     const warning  = notReady
       ? `<div style="margin-top:6px;font-size:11.5px;color:#8A5A12;background:var(--warn-soft);border-radius:8px;padding:3px 10px;display:inline-block;">⏳ En attente de préparation magasin</div>`
@@ -86,8 +109,15 @@ function renderStopsList() {
     if (s.emplacement) {
       extras.push(`<span style="font-size:11.5px;color:var(--ink-mute);">${esc(s.emplacement)}</span>`);
     }
-    if (s.photo_url) {
-      extras.push(`<button onclick="event.stopPropagation();openPhotoModal('${s.id}')" style="display:inline-flex;align-items:center;gap:5px;background:var(--canvas);border:1px solid var(--line);border-radius:8px;padding:3px 10px;font:600 11.5px 'Inter',sans-serif;color:var(--ink-soft);cursor:pointer;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13" r="4" stroke="currentColor" stroke-width="2"/></svg>Photo</button>`);
+
+    const photos = s.stop_photos || (s.photo_url ? [{ photo_url: s.photo_url }] : []);
+    if (photos.length) {
+      const label = photos.length === 1 ? 'Photo' : `${photos.length} photos`;
+      extras.push(`<button onclick="event.stopPropagation();openPhotoGallery('${s.id}')" style="display:inline-flex;align-items:center;gap:5px;background:var(--canvas);border:1px solid var(--line);border-radius:8px;padding:3px 10px;font:600 11.5px 'Inter',sans-serif;color:var(--ink-soft);cursor:pointer;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13" r="4" stroke="currentColor" stroke-width="2"/></svg>${label}</button>`);
+    }
+
+    if (s.commentaire_magasin) {
+      extras.push(`<div style="width:100%;margin-top:2px;font-size:11.5px;color:var(--ink-soft);background:var(--canvas);border-radius:8px;padding:4px 10px;">💬 ${esc(s.commentaire_magasin)}</div>`);
     }
 
     const magasinSection = (warning || extras.length)
@@ -98,7 +128,7 @@ function renderStopsList() {
     <div class="stop-card" onclick="openSheet('${s.id}')">
       <div class="stop-num ${sc}">${num}</div>
       <div class="stop-info">
-        <div class="stop-name">${esc(s.societe)}</div>
+        <div class="stop-name">${esc(s.societe)}${typeBadge}${groupBadge}</div>
         <div class="stop-addr">${esc(s.adresse)}</div>
         <div class="stop-meta">
           ${s.numero_affaire ? `N° ${esc(s.numero_affaire)}` : ''}
@@ -173,6 +203,12 @@ function openSheet(id) {
   const lbl = STATUS_LABEL[stop.statut] || stop.statut;
   document.getElementById('sheet-statut-current').innerHTML = `<span class="pill ${sc}">${lbl}</span>`;
 
+  // Info magasin
+  renderMagasinInfo(stop);
+
+  // Checkbox colis
+  renderColisConfirm(stop);
+
   renderStatusActions(stop);
 
   document.getElementById('sheet-overlay').classList.add('open');
@@ -185,8 +221,64 @@ function closeSheet() {
   activeStopId = null;
 }
 
+function renderMagasinInfo(stop) {
+  const container = document.getElementById('sheet-magasin-info');
+  const photos = stop.stop_photos || (stop.photo_url ? [{ photo_url: stop.photo_url }] : []);
+  const items = [];
+
+  if (stop.nombre_colis) {
+    items.push(`<span style="background:var(--turquoise-soft);color:var(--turquoise-dark);border-radius:99px;padding:2px 12px;font-size:12px;font-weight:700;">${stop.nombre_colis} colis</span>`);
+  }
+  if (stop.emplacement) {
+    items.push(`<span style="font-size:12.5px;color:var(--ink-soft);">📍 ${esc(stop.emplacement)}</span>`);
+  }
+  if (photos.length) {
+    const label = photos.length === 1 ? 'Voir la photo' : `Voir les ${photos.length} photos`;
+    items.push(`<button onclick="openPhotoGallery('${stop.id}')" style="display:inline-flex;align-items:center;gap:5px;background:var(--canvas);border:1px solid var(--line);border-radius:8px;padding:4px 12px;font:600 12.5px 'Inter',sans-serif;color:var(--ink-soft);cursor:pointer;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13" r="4" stroke="currentColor" stroke-width="2"/></svg>${label}</button>`);
+  }
+
+  if (!items.length && !stop.commentaire_magasin) {
+    container.innerHTML = '';
+    return;
+  }
+
+  let html = '';
+  if (items.length) {
+    html += `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:${stop.commentaire_magasin ? '10px' : '0'}">${items.join('')}</div>`;
+  }
+  if (stop.commentaire_magasin) {
+    html += `<div style="background:var(--canvas);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--ink-soft);border-left:3px solid var(--turquoise)">💬 ${esc(stop.commentaire_magasin)}</div>`;
+  }
+
+  container.innerHTML = `<div style="margin:12px 0">${html}</div>`;
+}
+
+function renderColisConfirm(stop) {
+  const el = document.getElementById('sheet-colis-confirm');
+  const cb = document.getElementById('cb-colis-confirme');
+
+  if (stop.magasin_valide && stop.nombre_colis && stop.statut === 'A_LIVRER') {
+    const empText = stop.emplacement ? ` (${stop.emplacement})` : '';
+    document.getElementById('cb-colis-label').textContent =
+      `J'ai bien pris les ${stop.nombre_colis} colis${empText}`;
+    cb.checked = stop.livreur_colis_confirme || false;
+    el.style.display = 'block';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+function onColisCheckChange() {
+  // Re-render actions to update disabled state
+  const stop = stops.find(s => s.id === activeStopId);
+  if (stop) renderStatusActions(stop);
+}
+
 function renderStatusActions(stop) {
   const container = document.getElementById('status-actions');
+  const cbChecked = document.getElementById('cb-colis-confirme')?.checked;
+  const needsCheck = stop.magasin_valide && stop.nombre_colis && stop.statut === 'A_LIVRER';
+
   const transitions = {
     A_LIVRER: [{ statut: 'EN_COURS', label: 'Démarrer la livraison', cls: 'active-now' }],
     EN_COURS: [{ statut: 'LIVRE',    label: 'Marquer comme livré',   cls: 'active-done' },
@@ -200,12 +292,29 @@ function renderStatusActions(stop) {
     return;
   }
 
-  container.innerHTML = actions.map(a =>
-    `<button class="status-btn ${a.cls}" onclick="changeStatus('${stop.id}','${a.statut}')">${a.label}</button>`
-  ).join('');
+  container.innerHTML = actions.map(a => {
+    const isStart = a.statut === 'EN_COURS';
+    const disabled = isStart && needsCheck && !cbChecked ? 'disabled' : '';
+    const title = isStart && needsCheck && !cbChecked ? 'Confirmez la prise en charge des colis d\'abord' : '';
+    return `<button class="status-btn ${a.cls}" onclick="changeStatus('${stop.id}','${a.statut}')" ${disabled} title="${title}">${a.label}</button>`;
+  }).join('');
 }
 
 async function changeStatus(id, newStatut) {
+  const stop = stops.find(s => s.id === id);
+  const cb = document.getElementById('cb-colis-confirme');
+
+  // Si on démarre la livraison et checkbox cochée → sauvegarder la confirmation
+  if (newStatut === 'EN_COURS' && cb && cb.checked && stop && !stop.livreur_colis_confirme) {
+    try {
+      await fetch(`/api/stops/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ livreur_colis_confirme: true }),
+      });
+    } catch { /* non-bloquant */ }
+  }
+
   try {
     const res = await fetch(`/api/stops/${id}`, {
       method: 'PATCH',
@@ -215,13 +324,14 @@ async function changeStatus(id, newStatut) {
     if (!res.ok) throw new Error();
     const updated = await res.json();
     const idx = stops.findIndex(s => s.id === id);
-    if (idx !== -1) stops[idx] = updated;
+    if (idx !== -1) stops[idx] = { ...updated, stop_photos: stops[idx]?.stop_photos || [] };
     renderStopsList();
     updateSummary();
     updateMapMarker(updated);
     const sc  = STATUS_CLASS[updated.statut] || 'todo';
     const lbl = STATUS_LABEL[updated.statut] || updated.statut;
     document.getElementById('sheet-statut-current').innerHTML = `<span class="pill ${sc}">${lbl}</span>`;
+    renderColisConfirm(updated);
     renderStatusActions(updated);
   } catch {
     alert('Erreur lors de la mise à jour. Réessayez.');
@@ -237,12 +347,17 @@ function updateMapMarker(stop) {
   markers[i].setIcon({ path: google.maps.SymbolPath.CIRCLE, scale: 14, fillColor: color, fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2 });
 }
 
-// ── Photo modal ───────────────────────────────────────────────
-function openPhotoModal(id) {
+// ── Galerie photos ────────────────────────────────────────────
+function openPhotoGallery(id) {
   const stop = stops.find(s => s.id === id);
-  if (!stop || !stop.photo_url) return;
+  if (!stop) return;
 
-  document.getElementById('photo-img').src = stop.photo_url;
+  const photos = stop.stop_photos || (stop.photo_url ? [{ photo_url: stop.photo_url }] : []);
+  if (!photos.length) return;
+
+  photoGallery = photos;
+  photoGalleryIndex = 0;
+  renderPhotoGallery();
 
   if (stop.magasin_valide_at) {
     const expiresAt = new Date(new Date(stop.magasin_valide_at).getTime() + 30 * 24 * 60 * 60 * 1000);
@@ -256,11 +371,42 @@ function openPhotoModal(id) {
   document.getElementById('photo-sheet').classList.add('open');
 }
 
+function renderPhotoGallery() {
+  const img = document.getElementById('photo-img');
+  const nav = document.getElementById('photo-nav');
+  const current = photoGallery[photoGalleryIndex];
+  if (!current) return;
+
+  img.src = current.photo_url;
+
+  if (photoGallery.length > 1) {
+    nav.style.display = 'flex';
+    document.getElementById('photo-nav-label').textContent = `${photoGalleryIndex + 1} / ${photoGallery.length}`;
+    document.getElementById('photo-prev').disabled = photoGalleryIndex === 0;
+    document.getElementById('photo-next').disabled = photoGalleryIndex === photoGallery.length - 1;
+  } else {
+    nav.style.display = 'none';
+  }
+}
+
+function photoNavPrev() {
+  if (photoGalleryIndex > 0) { photoGalleryIndex--; renderPhotoGallery(); }
+}
+
+function photoNavNext() {
+  if (photoGalleryIndex < photoGallery.length - 1) { photoGalleryIndex++; renderPhotoGallery(); }
+}
+
 function closePhotoModal() {
   document.getElementById('photo-overlay').classList.remove('open');
   document.getElementById('photo-sheet').classList.remove('open');
   document.getElementById('photo-img').src = '';
+  photoGallery = [];
+  photoGalleryIndex = 0;
 }
+
+// Garder l'ancienne fonction pour la compat avec la liste (bouton Photo dans la card)
+function openPhotoModal(id) { openPhotoGallery(id); }
 
 // ── Utils ─────────────────────────────────────────────────────
 function esc(str) {
