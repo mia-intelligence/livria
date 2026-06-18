@@ -247,6 +247,7 @@
                 <th>Adresse</th>
                 <th>Affaire</th>
                 <th>Type</th>
+                <th>Date</th>
                 <th>Tournée</th>
                 <th>Magasin</th>
                 <th>Statut</th>
@@ -333,6 +334,10 @@
       <label>Groupe livraison</label>
       <input type="text" id="ns-groupe-livraison" placeholder="Ex : 2026-089 (lie PVC et ALU d'un même client)">
     </div>
+    <div class="field" style="margin-top:12px">
+      <label>Date de livraison *</label>
+      <input type="date" id="ns-date-tournee">
+    </div>
     <div class="modal-actions">
       <button class="btn" onclick="closeNewStopModal()">Annuler</button>
       <button class="btn primary" onclick="createStop()">Ajouter le stop</button>
@@ -389,6 +394,23 @@
     <div class="modal-actions">
       <button class="btn" onclick="closeDeleteStopModal()">Annuler</button>
       <button class="btn danger" onclick="confirmDeleteStop()">Supprimer</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL REPORTER -->
+<div class="modal-overlay hidden" id="reporter-modal">
+  <div class="modal">
+    <h2>Reporter ce stop</h2>
+    <div class="modal-sub" id="reporter-modal-desc"></div>
+    <div id="reporter-error" style="background:var(--danger-soft);color:#A14444;border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:14px;display:none"></div>
+    <div class="field" style="margin-top:8px">
+      <label>Nouvelle date de livraison *</label>
+      <input type="date" id="reporter-date">
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeReporterModal()">Annuler</button>
+      <button class="btn primary" onclick="confirmReporter()">Confirmer</button>
     </div>
   </div>
 </div>

@@ -21,7 +21,7 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === 'PATCH') {
-    const { statut, ordre, tournee, vehicule, nombre_colis, emplacement, photo_url, magasin_valide, magasin_valide_at, commentaire_magasin, livreur_colis_confirme, type_produit, groupe_livraison } = req.body;
+    const { statut, ordre, tournee, vehicule, nombre_colis, emplacement, photo_url, magasin_valide, magasin_valide_at, commentaire_magasin, livreur_colis_confirme, type_produit, groupe_livraison, date_tournee } = req.body;
     const VALID_STATUTS  = ['A_LIVRER', 'EN_COURS', 'LIVRE'];
     const VALID_TOURNEES = ['ENLEVEMENT','TOURNEE LUNDI','MARDI T06-T83EST','MERCREDI T13','TOURNEE JEUDI','VENDREDI T83 OUEST','LIVRAISON CHANTIER','TRANSPORTEUR'];
     const VALID_VEHICULES = ['PL', 'VL'];
@@ -79,6 +79,7 @@ module.exports = async function handler(req, res) {
 
     // Type produit et groupe livraison — ADV/ADMIN
     if (['ADV', 'ADMIN'].includes(role)) {
+      if (date_tournee !== undefined) updates.date_tournee = date_tournee;
       if (type_produit !== undefined) {
         const VALID_TYPES = ['PVC', 'ALU', 'MIXTE'];
         if (type_produit !== null && !VALID_TYPES.includes(type_produit)) {

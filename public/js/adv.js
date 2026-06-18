@@ -359,6 +359,55 @@ async function confirmDeleteStop() {
   }
 }
 
+// ── Reporter stop ─────────────────────────────────────────────
+let pendingReporterId = null;
+
+function openReporterModal(id, currentDate) {
+  pendingReporterId = id;
+  const stop = allStops.find(s => s.id === id);
+  document.getElementById('reporter-modal-desc').textContent = stop ? `${stop.societe} — ${stop.adresse}` : '';
+  document.getElementById('reporter-date').value = currentDate || new Date().toISOString().split('T')[0];
+  document.getElementById('reporter-error').style.display = 'none';
+  document.getElementById('reporter-modal').classList.remove('hidden');
+}
+
+function closeReporterModal() {
+  document.getElementById('reporter-modal').classList.add('hidden');
+  pendingReporterId = null;
+}
+
+async function confirmReporter() {
+  if (!pendingReporterId) return;
+  const newDate = document.getElementById('reporter-date').value;
+  const errEl   = document.getElementById('reporter-error');
+  errEl.style.display = 'none';
+
+  if (!newDate) {
+    errEl.textContent   = 'Sélectionnez une date.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/stops/${pendingReporterId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date_tournee: newDate }),
+    });
+    if (!res.ok) {
+      const d = await res.json();
+      errEl.textContent   = d.error || 'Erreur serveur';
+      errEl.style.display = 'block';
+      return;
+    }
+    closeReporterModal();
+    await loadStops();
+  } catch {
+    errEl.textContent   = 'Erreur réseau. Réessayez.';
+    errEl.style.display = 'block';
+  }
+}
+
 // ── Tournée du jour ────────────────────────────────────────────
 function setFilter(f) {
   activeFilter = f;
@@ -384,7 +433,7 @@ function renderTournee() {
   const tbody = document.getElementById('tournee-tbody');
 
   if (!filtered.length) {
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--ink-mute)">Aucun stop pour ce filtre.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--ink-mute)">Aucun stop pour ce filtre.</td></tr>`;
     return;
   }
 
@@ -462,6 +511,10 @@ function renderTournee() {
         </div>`;
     }
 
+    const dateStr = s.date_tournee
+      ? new Date(s.date_tournee + 'T00:00:00').toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+      : '—';
+
     return `
       <tr>
         <td class="strong">${s.ordre ?? '—'}</td>
@@ -469,6 +522,12 @@ function renderTournee() {
         <td class="muted" style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.adresse)}</td>
         <td class="muted">${s.numero_affaire ? esc(s.numero_affaire) : '—'}</td>
         <td><span class="type-badge ${societeLivraison.toLowerCase()}">${TYPE_LABEL[societeLivraison] || societeLivraison}</span></td>
+        <td class="muted" style="white-space:nowrap">
+          ${dateStr}
+          <button onclick="openReporterModal('${s.id}','${s.date_tournee || ''}')" title="Reporter" style="border:none;background:none;cursor:pointer;color:var(--ink-mute);padding:1px 3px;border-radius:4px;vertical-align:middle" onmouseover="this.style.color='var(--turquoise)'" onmouseout="this.style.color='var(--ink-mute)'">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"/><path d="M16 2v4M8 2v4M3 10h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+        </td>
         <td>${tourneeCell}</td>
         <td>${magasinCell}</td>
         <td><span class="pill ${STATUS_CLASS[s.statut] || 'todo'}">${STATUS_LABEL[s.statut] || s.statut}</span></td>
@@ -541,6 +600,7 @@ function openNewStopModal() {
   document.getElementById('ns-vehicule').value        = '';
   document.getElementById('ns-type-produit').value    = '';
   document.getElementById('ns-groupe-livraison').value = '';
+  document.getElementById('ns-date-tournee').value     = new Date().toISOString().split('T')[0];
   document.getElementById('modal-error').style.display = 'none';
 }
 
@@ -558,6 +618,7 @@ async function createStop() {
   const vehicule          = document.getElementById('ns-vehicule').value;
   const type_produit      = document.getElementById('ns-type-produit').value || null;
   const groupe_livraison  = document.getElementById('ns-groupe-livraison').value.trim() || null;
+  const date_tournee      = document.getElementById('ns-date-tournee').value || new Date().toISOString().split('T')[0];
   const errEl             = document.getElementById('modal-error');
 
   errEl.style.display = 'none';
@@ -592,6 +653,7 @@ async function createStop() {
         vehicule,
         type_produit,
         groupe_livraison,
+        date_tournee,
       })
     });
 
