@@ -482,13 +482,11 @@ function renderTournee() {
     }
 
     // Colonne actions
-    const isDirty = !!(pendingRowChanges[s.id] && Object.keys(pendingRowChanges[s.id]).length);
     let actionsCell = '';
     if (s.statut === 'LIVRE') {
       actionsCell = `
         <div style="display:flex;align-items:center;gap:6px">
           <span style="color:var(--success);font-weight:600;font-size:12px">✓ Livré</span>
-          ${isDirty ? `<button onclick="saveRowChanges('${s.id}')" style="background:var(--turquoise);color:#fff;border:none;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">💾 Sauvegarder</button>` : ''}
           <button onclick="openDeleteStopModal('${s.id}')" title="Supprimer"
             style="border:none;background:none;cursor:pointer;color:var(--ink-mute);padding:2px 4px;border-radius:6px"
             onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--ink-mute)'">
@@ -498,7 +496,6 @@ function renderTournee() {
     } else {
       actionsCell = `
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          ${isDirty ? `<button onclick="saveRowChanges('${s.id}')" style="background:var(--turquoise);color:#fff;border:none;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">💾 Sauvegarder</button>` : `
           <select style="border:1px solid var(--line);border-radius:8px;padding:4px 8px;font:inherit;font-size:12px;color:var(--ink);cursor:pointer"
             onchange="changeStopStatus('${s.id}', this.value)">
             <option value="A_LIVRER" ${s.statut === 'A_LIVRER' ? 'selected' : ''}>À livrer</option>
@@ -509,7 +506,7 @@ function renderTournee() {
             style="background:var(--success);color:#fff;border:none;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap"
             title="Marquer comme livré">
             ✓ Livré
-          </button>`}
+          </button>
           <button onclick="openDeleteStopModal('${s.id}')" title="Supprimer"
             style="border:none;background:none;cursor:pointer;color:var(--ink-mute);padding:2px 4px;border-radius:6px"
             onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--ink-mute)'">
@@ -518,13 +515,12 @@ function renderTournee() {
         </div>`;
     }
 
-    const rowStyle = isDirty ? 'background:rgba(75,191,191,.07);outline:2px solid var(--turquoise);outline-offset:-1px;' : '';
     const dateStr = s.date_tournee
       ? new Date(s.date_tournee + 'T00:00:00').toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })
       : '—';
 
     return `
-      <tr style="${rowStyle}">
+      <tr>
         <td class="strong">${s.ordre ?? '—'}</td>
         <td class="strong">${esc(s.societe)}</td>
         <td class="muted" style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.adresse)}</td>
@@ -574,7 +570,29 @@ async function changeStopStatus(id, newStatut) {
 function markRowChange(id, field, value) {
   if (!pendingRowChanges[id]) pendingRowChanges[id] = {};
   pendingRowChanges[id][field] = value;
-  renderTournee();
+  // Mettre à jour uniquement la ligne concernée sans re-render global
+  const selEl = document.getElementById(`sel-tournee-${id}`);
+  if (!selEl) return;
+  const row = selEl.closest('tr');
+  if (!row) return;
+  // Surligner la ligne
+  row.style.background    = 'rgba(75,191,191,.07)';
+  row.style.outline       = '2px solid var(--turquoise)';
+  row.style.outlineOffset = '-1px';
+  // Remplacer le contenu de la cellule actions (dernière td)
+  const tds = row.querySelectorAll('td');
+  const actionsTd = tds[tds.length - 1];
+  if (actionsTd) {
+    actionsTd.innerHTML = `
+      <div style="display:flex;align-items:center;gap:6px">
+        <button onclick="saveRowChanges('${id}')" style="background:var(--turquoise);color:#fff;border:none;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">💾 Sauvegarder</button>
+        <button onclick="openDeleteStopModal('${id}')" title="Supprimer"
+          style="border:none;background:none;cursor:pointer;color:var(--ink-mute);padding:2px 4px;border-radius:6px"
+          onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--ink-mute)'">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><polyline points="3 6 5 6 21 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M19 6l-1 14H6L5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M10 11v6M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9 6V4h6v2" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+        </button>
+      </div>`;
+  }
 }
 
 async function saveRowChanges(id) {
