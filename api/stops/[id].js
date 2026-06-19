@@ -1,5 +1,6 @@
 const { getDB } = require('../../lib/db');
 const { requireAuth } = require('../../lib/auth');
+const { log } = require('../../lib/log');
 
 module.exports = async function handler(req, res) {
   const session = await requireAuth(req, res);
@@ -21,7 +22,7 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === 'PATCH') {
-    const { statut, ordre, tournee, vehicule, nombre_colis, emplacement, photo_url, magasin_valide, magasin_valide_at, commentaire_magasin, livreur_colis_confirme, type_produit, groupe_livraison, date_tournee } = req.body;
+    const { statut, ordre, tournee, vehicule, societe_livraison, nombre_colis, emplacement, photo_url, magasin_valide, magasin_valide_at, commentaire_magasin, livreur_colis_confirme, type_produit, groupe_livraison, date_tournee, societe, adresse, telephone, numero_affaire, latitude, longitude } = req.body;
     const VALID_STATUTS  = ['A_LIVRER', 'EN_COURS', 'LIVRE'];
     const VALID_TOURNEES = ['ENLEVEMENT','TOURNEE LUNDI','MARDI T06-T83EST','MERCREDI T13','TOURNEE JEUDI','VENDREDI T83 OUEST','LIVRAISON CHANTIER','TRANSPORTEUR'];
     const VALID_VEHICULES = ['PL', 'VL'];
@@ -81,6 +82,21 @@ module.exports = async function handler(req, res) {
       updates.livreur_colis_confirme = livreur_colis_confirme;
     }
 
+    // Champs admin complets — ADMIN uniquement
+    if (role === 'ADMIN') {
+      if (societe !== undefined)          updates.societe          = societe;
+      if (adresse !== undefined)          updates.adresse          = adresse;
+      if (telephone !== undefined)        updates.telephone        = telephone;
+      if (numero_affaire !== undefined)   updates.numero_affaire   = numero_affaire;
+      if (latitude !== undefined)         updates.latitude         = latitude;
+      if (longitude !== undefined)        updates.longitude        = longitude;
+      if (societe_livraison !== undefined) {
+        const VALID_SL = ['ATRIAL', 'ENLEVEMENT', 'TRANSPORTEUR'];
+        if (!VALID_SL.includes(societe_livraison)) return res.status(400).json({ error: 'societe_livraison invalide' });
+        updates.societe_livraison = societe_livraison;
+      }
+    }
+
     // Type produit et groupe livraison — ADV/ADMIN
     if (['ADV', 'ADMIN'].includes(role)) {
       if (date_tournee !== undefined) updates.date_tournee = date_tournee;
@@ -109,6 +125,13 @@ module.exports = async function handler(req, res) {
 
     if (error) return res.status(500).json({ error: error.message });
     if (!data) return res.status(404).json({ error: 'Stop introuvable' });
+
+    // Log actions clés
+    const userEmail = session.users.email;
+    if (updates.statut) await log(userEmail, `STOP_${updates.statut}`, { stop_id: id, societe: data.societe });
+    if (updates.magasin_valide) await log(userEmail, 'STOP_MAGASIN_VALIDE', { stop_id: id, societe: data.societe, colis: data.nombre_colis });
+    if (updates.password_hash) await log(userEmail, 'PASSWORD_RESET', { stop_id: id });
+
     return res.status(200).json(data);
   }
 

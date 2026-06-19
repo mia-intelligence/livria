@@ -1,5 +1,7 @@
 const { getDB } = require('../../lib/db');
 const { requireRole } = require('../../lib/auth');
+const { log } = require('../../lib/log');
+const bcrypt = require('bcrypt');
 
 module.exports = async function handler(req, res) {
   const session = await requireRole(req, res, 'ADMIN');
@@ -7,22 +9,33 @@ module.exports = async function handler(req, res) {
 
   const { id } = req.query;
   const db = getDB();
+  const adminEmail = session.users.email;
 
   if (req.method === 'PATCH') {
-    const { actif } = req.body;
+    const { actif, password } = req.body;
+    const updates = {};
 
-    if (typeof actif !== 'boolean') {
-      return res.status(400).json({ error: 'Le champ actif (boolean) est requis' });
+    if (typeof actif === 'boolean') {
+      if (id === session.users.id && actif === false) {
+        return res.status(400).json({ error: 'Impossible de révoquer votre propre compte' });
+      }
+      updates.actif = actif;
     }
 
-    // Empêcher un admin de se révoquer lui-même
-    if (id === session.users.id && actif === false) {
-      return res.status(400).json({ error: 'Impossible de révoquer votre propre compte' });
+    if (password !== undefined) {
+      if (!password || password.length < 8) {
+        return res.status(400).json({ error: 'Mot de passe trop court (min. 8 caractères)' });
+      }
+      updates.password_hash = await bcrypt.hash(password, 10);
+    }
+
+    if (!Object.keys(updates).length) {
+      return res.status(400).json({ error: 'Aucun champ à mettre à jour' });
     }
 
     const { data, error } = await db
       .from('users')
-      .update({ actif })
+      .update(updates)
       .eq('id', id)
       .select('id, nom, prenom, email, role, actif')
       .single();
@@ -30,9 +43,14 @@ module.exports = async function handler(req, res) {
     if (error) return res.status(500).json({ error: error.message });
     if (!data) return res.status(404).json({ error: 'Utilisateur introuvable' });
 
-    // Si révocation : invalider toutes les sessions actives de l'utilisateur
-    if (!actif) {
+    if (updates.actif === false) {
       await db.from('sessions').delete().eq('user_id', id);
+      await log(adminEmail, 'USER_REVOKED', { target: data.email });
+    } else if (updates.actif === true) {
+      await log(adminEmail, 'USER_REACTIVATED', { target: data.email });
+    }
+    if (updates.password_hash) {
+      await log(adminEmail, 'PASSWORD_RESET', { target: data.email });
     }
 
     return res.status(200).json(data);

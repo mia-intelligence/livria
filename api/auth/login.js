@@ -1,5 +1,6 @@
 const { getDB } = require('../../lib/db');
 const { setSessionCookie } = require('../../lib/auth');
+const { log } = require('../../lib/log');
 const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
 
@@ -49,6 +50,7 @@ module.exports = async function handler(req, res) {
   await db.from('users').update({ last_login: new Date().toISOString() }).eq('id', user.id);
 
   setSessionCookie(res, token);
+  await log(user.email, 'LOGIN', { role: user.role });
 
   return res.status(200).json({
     role: user.role,

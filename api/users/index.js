@@ -1,5 +1,6 @@
 const { getDB } = require('../../lib/db');
 const { requireRole } = require('../../lib/auth');
+const { log } = require('../../lib/log');
 const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
 
@@ -59,6 +60,7 @@ module.exports = async function handler(req, res) {
       .single();
 
     if (error) return res.status(500).json({ error: error.message });
+    await log(session.users.email, 'USER_CREATED', { target: data.email, role: data.role });
     return res.status(201).json(data);
   }
 

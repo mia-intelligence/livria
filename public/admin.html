@@ -8,29 +8,53 @@
   <style>
     body { background: var(--canvas); }
 
-    /* Role badges */
-    .role-badge {
-      display: inline-block; padding: 2px 9px; border-radius: 6px;
-      font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    .role-badge { display:inline-block;padding:2px 9px;border-radius:6px;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase; }
+    .role-badge.LIVREUR { background:#E6F6F6;color:#2E8F8F; }
+    .role-badge.ADV     { background:#E3EEF6;color:#3A6080; }
+    .role-badge.ADMIN   { background:#F1E6F6;color:#6A2E8F; }
+    .role-badge.MAGASIN { background:#FDF1DC;color:#8A5A12; }
+
+    .user-actif   { color:var(--success);font-weight:600;font-size:12px; }
+    .user-revoked { color:var(--danger);font-weight:600;font-size:12px; }
+    .history-row  { background:#FAFBFC; }
+    .history-row td { padding:8px 20px 16px 56px;color:var(--ink-soft);font-size:12px; }
+
+    /* Admin tabs */
+    .admin-tabs { display:flex;gap:0;border-bottom:2px solid var(--line);margin-bottom:20px; }
+    .admin-tab  { padding:10px 18px;font:600 13px 'Inter',sans-serif;cursor:pointer;
+                  border:none;background:none;color:var(--ink-mute);border-bottom:2px solid transparent;margin-bottom:-2px; }
+    .admin-tab.active { color:var(--turquoise);border-bottom-color:var(--turquoise); }
+
+    /* Log entries */
+    .log-entry { display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line); }
+    .log-dot   { width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px; }
+    .log-dot.LOGIN              { background:#3DBE7A; }
+    .log-dot.STOP_LIVRE         { background:#3DBE7A; }
+    .log-dot.STOP_EN_COURS      { background:#F2A93B; }
+    .log-dot.STOP_A_LIVRER      { background:#9AA3AD; }
+    .log-dot.STOP_MAGASIN_VALIDE{ background:var(--turquoise); }
+    .log-dot.USER_REVOKED       { background:#E05050; }
+    .log-dot.USER_REACTIVATED   { background:#3DBE7A; }
+    .log-dot.USER_CREATED       { background:var(--turquoise); }
+    .log-dot.PASSWORD_RESET     { background:#F2A93B; }
+    .log-dot.DEFAULT            { background:var(--ink-mute); }
+    .log-action { font-size:12px;font-weight:700;color:var(--ink); }
+    .log-detail { font-size:12px;color:var(--ink-soft); }
+    .log-time   { font-size:11px;color:var(--ink-mute);white-space:nowrap;margin-left:auto;flex-shrink:0; }
+
+    /* Stop edit fields */
+    .edit-grid-2 { display:grid;grid-template-columns:1fr 1fr;gap:12px; }
+    .field-sm label { font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-mute);margin-bottom:4px;display:block; }
+    .field-sm input, .field-sm select {
+      width:100%;height:36px;border-radius:8px;border:1px solid var(--line);
+      padding:0 10px;font:inherit;font-size:13px;color:var(--ink);background:var(--bg);outline:none;
     }
-    .role-badge.LIVREUR     { background: #E6F6F6; color: #2E8F8F; }
-    .role-badge.ADV         { background: #E3EEF6; color: #3A6080; }
-    .role-badge.ADMIN       { background: #F1E6F6; color: #6A2E8F; }
-    .role-badge.MAGASIN     { background: #FDF1DC; color: #8A5A12; }
-
-    /* Status dot */
-    .user-actif   { color: var(--success); font-weight: 600; font-size: 12px; }
-    .user-revoked { color: var(--danger);  font-weight: 600; font-size: 12px; }
-
-    /* History expand */
-    .history-row { background: #FAFBFC; }
-    .history-row td { padding: 8px 20px 16px 56px; color: var(--ink-soft); font-size: 12px; }
+    .field-sm input:focus, .field-sm select:focus { border-color:var(--turquoise); }
   </style>
 </head>
 <body>
 <div class="app-layout">
 
-  <!-- SIDEBAR -->
   <aside class="sidebar">
     <a class="brand" href="/admin">
       <div class="logo-circle"><img src="/images/atrial-logo.jpeg" alt="Atrial"></div>
@@ -42,9 +66,17 @@
 
     <div class="nav-section">Administration</div>
     <nav>
-      <a class="active">
+      <a class="active" onclick="switchTab('users')">
         <svg class="ic" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8" r="3.5" stroke="currentColor" stroke-width="2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" stroke-width="2"/><circle cx="17" cy="10" r="2.5" stroke="currentColor" stroke-width="2"/><path d="M15 19.5c0-2.1 1.2-3.5 2.5-3.5s2.5 1.4 2.5 3.5" stroke="currentColor" stroke-width="2"/></svg>
         Utilisateurs
+      </a>
+      <a onclick="switchTab('stops')">
+        <svg class="ic" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"/><path d="M3 9h18M9 21V9" stroke="currentColor" stroke-width="2"/></svg>
+        Stops (debug)
+      </a>
+      <a onclick="switchTab('logs')">
+        <svg class="ic" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="2"/><polyline points="14 2 14 8 20 8" stroke="currentColor" stroke-width="2"/><line x1="16" y1="13" x2="8" y2="13" stroke="currentColor" stroke-width="2"/><line x1="16" y1="17" x2="8" y2="17" stroke="currentColor" stroke-width="2"/></svg>
+        Logs activité
       </a>
     </nav>
 
@@ -58,15 +90,10 @@
     </div>
   </aside>
 
-  <!-- MAIN -->
   <div class="main-area">
     <div class="topbar">
-      <div class="crumbs">
-        <b>Utilisateurs</b>
-        <span class="sep">·</span>
-        <span id="topbar-date"></span>
-      </div>
-      <div class="top-actions">
+      <div class="crumbs"><b id="topbar-title">Utilisateurs</b><span class="sep">·</span><span id="topbar-date"></span></div>
+      <div class="top-actions" id="topbar-actions">
         <button class="btn primary" onclick="openCreateModal()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg>
           Créer un accès
@@ -75,61 +102,71 @@
     </div>
 
     <div class="page-content">
-      <div class="page-head">
-        <div>
-          <h1>Gestion des accès</h1>
-          <div class="lead" id="users-lead">Chargement…</div>
+      <div id="feedback" style="display:none;padding:12px 16px;border-radius:10px;margin-bottom:16px;font-size:13.5px;font-weight:500"></div>
+
+      <!-- ── TAB UTILISATEURS ── -->
+      <div id="tab-users">
+        <div class="page-head"><div><h1>Gestion des accès</h1><div class="lead" id="users-lead">Chargement…</div></div></div>
+        <div class="card" style="padding:0">
+          <table class="tbl">
+            <thead><tr>
+              <th>Utilisateur</th><th>Email</th><th>Rôle</th><th>Statut</th><th>Dernière connexion</th><th>Actions</th>
+            </tr></thead>
+            <tbody id="users-tbody">
+              <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--ink-mute)">Chargement…</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
-      <!-- Feedback message -->
-      <div id="feedback" style="display:none;padding:12px 16px;border-radius:10px;margin-bottom:16px;font-size:13.5px;font-weight:500"></div>
+      <!-- ── TAB STOPS ── -->
+      <div id="tab-stops" style="display:none">
+        <div class="page-head">
+          <div><h1>Debug stops</h1><div class="lead" id="stops-debug-lead">Sélectionner une date</div></div>
+          <div style="display:flex;align-items:center;gap:10px;margin-left:auto">
+            <input type="date" id="debug-date" onchange="loadDebugStops()"
+              style="height:36px;border-radius:8px;border:1px solid var(--line);padding:0 10px;font:inherit;font-size:13px">
+          </div>
+        </div>
+        <div class="card" style="padding:0">
+          <table class="tbl">
+            <thead><tr>
+              <th>#</th><th>Société</th><th>Affaire</th><th>Type</th><th>Date</th><th>Tournée</th><th>Statut</th><th>Magasin</th><th>Actions</th>
+            </tr></thead>
+            <tbody id="stops-debug-tbody">
+              <tr><td colspan="9" style="text-align:center;padding:40px;color:var(--ink-mute)">Sélectionner une date ci-dessus.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-      <div class="card" style="padding:0">
-        <table class="tbl" id="users-table">
-          <thead>
-            <tr>
-              <th>Utilisateur</th>
-              <th>Email</th>
-              <th>Rôle</th>
-              <th>Statut</th>
-              <th>Dernière connexion</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="users-tbody">
-            <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--ink-mute)">Chargement…</td></tr>
-          </tbody>
-        </table>
+      <!-- ── TAB LOGS ── -->
+      <div id="tab-logs" style="display:none">
+        <div class="page-head">
+          <div><h1>Logs d'activité</h1><div class="lead" id="logs-lead">200 dernières entrées</div></div>
+          <div style="margin-left:auto">
+            <button class="btn" onclick="loadLogs()">↻ Actualiser</button>
+          </div>
+        </div>
+        <div class="card" style="padding:16px 20px" id="logs-container">
+          <div style="text-align:center;padding:40px;color:var(--ink-mute)">Chargement…</div>
+        </div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- ── MODAL CRÉER UTILISATEUR ────────────────────────────────── -->
+<!-- ── MODAL CRÉER UTILISATEUR ── -->
 <div class="modal-overlay hidden" id="create-modal">
   <div class="modal">
     <h2>Créer un accès</h2>
-    <div class="modal-sub">Le mot de passe temporaire devra être changé à la première connexion.</div>
-
     <div id="create-error" style="background:var(--danger-soft);color:#A14444;border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:14px;display:none"></div>
-
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="field">
-        <label>Prénom *</label>
-        <input type="text" id="cu-prenom" placeholder="Jean">
-      </div>
-      <div class="field">
-        <label>Nom *</label>
-        <input type="text" id="cu-nom" placeholder="Dupont">
-      </div>
+      <div class="field"><label>Prénom *</label><input type="text" id="cu-prenom" placeholder="Jean"></div>
+      <div class="field"><label>Nom *</label><input type="text" id="cu-nom" placeholder="Dupont"></div>
     </div>
-    <div class="field">
-      <label>Email *</label>
-      <input type="email" id="cu-email" placeholder="jean.dupont@atrial.fr">
-    </div>
-    <div class="field">
-      <label>Rôle *</label>
+    <div class="field"><label>Email *</label><input type="email" id="cu-email" placeholder="jean.dupont@atrial.fr"></div>
+    <div class="field"><label>Rôle *</label>
       <select id="cu-role">
         <option value="LIVREUR">LIVREUR</option>
         <option value="ADV">ADV</option>
@@ -137,11 +174,7 @@
         <option value="ADMIN">ADMIN</option>
       </select>
     </div>
-    <div class="field">
-      <label>Mot de passe temporaire *</label>
-      <input type="text" id="cu-password" placeholder="min. 8 caractères">
-    </div>
-
+    <div class="field"><label>Mot de passe temporaire *</label><input type="text" id="cu-password" placeholder="min. 8 caractères"></div>
     <div class="modal-actions">
       <button class="btn" onclick="closeCreateModal()">Annuler</button>
       <button class="btn primary" onclick="createUser()">Créer l'accès</button>
@@ -149,17 +182,110 @@
   </div>
 </div>
 
-<!-- ── MODAL CONFIRMER RÉVOCATION ─────────────────────────────── -->
+<!-- ── MODAL RESET MOT DE PASSE ── -->
+<div class="modal-overlay hidden" id="reset-pwd-modal">
+  <div class="modal">
+    <h2>Réinitialiser le mot de passe</h2>
+    <div class="modal-sub" id="reset-pwd-desc"></div>
+    <div id="reset-pwd-error" style="background:var(--danger-soft);color:#A14444;border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:14px;display:none"></div>
+    <div class="field">
+      <label>Nouveau mot de passe *</label>
+      <input type="text" id="reset-pwd-input" placeholder="min. 8 caractères">
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeResetPwdModal()">Annuler</button>
+      <button class="btn primary" onclick="confirmResetPwd()">Réinitialiser</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL RÉVOQUER ── -->
 <div class="modal-overlay hidden" id="revoke-modal">
   <div class="modal">
     <h2>Révoquer cet accès ?</h2>
     <div class="modal-sub" id="revoke-desc"></div>
-    <p style="font-size:13px;color:var(--ink-soft)">
-      L'utilisateur sera immédiatement déconnecté et ne pourra plus se connecter.
-    </p>
+    <p style="font-size:13px;color:var(--ink-soft)">L'utilisateur sera immédiatement déconnecté.</p>
     <div class="modal-actions">
       <button class="btn" onclick="closeRevokeModal()">Annuler</button>
       <button class="btn danger" onclick="confirmRevoke()">Révoquer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL EDIT STOP ── -->
+<div class="modal-overlay hidden" id="edit-stop-modal">
+  <div class="modal" style="max-width:640px;width:95vw">
+    <h2>Modifier le stop</h2>
+    <div class="modal-sub" id="edit-stop-desc"></div>
+    <div id="edit-stop-error" style="background:var(--danger-soft);color:#A14444;border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:14px;display:none"></div>
+
+    <div class="edit-grid-2" style="margin-bottom:10px">
+      <div class="field-sm"><label>Société</label><input type="text" id="es-societe"></div>
+      <div class="field-sm"><label>N° Affaire</label><input type="text" id="es-affaire"></div>
+    </div>
+    <div class="field-sm" style="margin-bottom:10px"><label>Adresse</label><input type="text" id="es-adresse"></div>
+    <div class="edit-grid-2" style="margin-bottom:10px">
+      <div class="field-sm"><label>Téléphone</label><input type="text" id="es-telephone"></div>
+      <div class="field-sm"><label>Date livraison</label><input type="date" id="es-date"></div>
+    </div>
+    <div class="edit-grid-2" style="margin-bottom:10px">
+      <div class="field-sm"><label>Type</label>
+        <select id="es-societe-livraison">
+          <option value="ATRIAL">ATRIAL</option>
+          <option value="ENLEVEMENT">ENLEVEMENT</option>
+          <option value="TRANSPORTEUR">TRANSPORTEUR</option>
+        </select>
+      </div>
+      <div class="field-sm"><label>Statut</label>
+        <select id="es-statut">
+          <option value="A_LIVRER">À livrer</option>
+          <option value="EN_COURS">En cours</option>
+          <option value="LIVRE">Livré</option>
+        </select>
+      </div>
+    </div>
+    <div class="edit-grid-2" style="margin-bottom:10px">
+      <div class="field-sm"><label>Tournée</label>
+        <select id="es-tournee">
+          <option value="">— Aucune —</option>
+          <option value="ENLEVEMENT">Enlèvement</option>
+          <option value="TOURNEE LUNDI">Tournée Lundi</option>
+          <option value="MARDI T06-T83EST">Mardi T06-T83EST</option>
+          <option value="MERCREDI T13">Mercredi T13</option>
+          <option value="TOURNEE JEUDI">Tournée Jeudi</option>
+          <option value="VENDREDI T83 OUEST">Vendredi T83 Ouest</option>
+          <option value="LIVRAISON CHANTIER">Livraison Chantier</option>
+          <option value="TRANSPORTEUR">Transporteur</option>
+        </select>
+      </div>
+      <div class="field-sm"><label>Véhicule</label>
+        <select id="es-vehicule">
+          <option value="">— Aucun —</option>
+          <option value="VL">VL</option>
+          <option value="PL">PL</option>
+        </select>
+      </div>
+    </div>
+    <div class="edit-grid-2" style="margin-bottom:10px">
+      <div class="field-sm"><label>Ordre</label><input type="number" id="es-ordre" min="1"></div>
+      <div class="field-sm"><label>Nb colis</label><input type="number" id="es-colis" min="0"></div>
+    </div>
+    <div class="edit-grid-2" style="margin-bottom:10px">
+      <div class="field-sm"><label>Emplacement</label><input type="text" id="es-emplacement"></div>
+      <div class="field-sm"><label>Type produit</label>
+        <select id="es-type-produit">
+          <option value="">— Aucun —</option>
+          <option value="PVC">PVC</option>
+          <option value="ALU">ALU</option>
+          <option value="MIXTE">MIXTE</option>
+        </select>
+      </div>
+    </div>
+    <div class="field-sm" style="margin-bottom:16px"><label>Groupe livraison</label><input type="text" id="es-groupe"></div>
+
+    <div class="modal-actions">
+      <button class="btn" onclick="closeEditStopModal()">Annuler</button>
+      <button class="btn primary" onclick="saveEditStop()">Enregistrer</button>
     </div>
   </div>
 </div>
