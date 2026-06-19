@@ -487,6 +487,10 @@ function renderTournee() {
       actionsCell = `
         <div style="display:flex;align-items:center;gap:6px">
           <span style="color:var(--success);font-weight:600;font-size:12px">✓ Livré</span>
+          <button onclick="changeStopStatus('${s.id}','A_LIVRER')" title="Annuler la livraison"
+            style="border:1px solid var(--line);background:var(--canvas);border-radius:8px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;color:var(--ink-mute);white-space:nowrap">
+            ↩ Annuler
+          </button>
           <button onclick="openDeleteStopModal('${s.id}')" title="Supprimer"
             style="border:none;background:none;cursor:pointer;color:var(--ink-mute);padding:2px 4px;border-radius:6px"
             onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--ink-mute)'">
