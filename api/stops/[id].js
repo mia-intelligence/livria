@@ -51,6 +51,10 @@ module.exports = async function handler(req, res) {
           return res.status(400).json({ error: 'tournee invalide' });
         }
         updates.tournee = tournee;
+        // Sync societe_livraison avec la tournée
+        if (tournee === 'ENLEVEMENT')        updates.societe_livraison = 'ENLEVEMENT';
+        else if (tournee === 'TRANSPORTEUR') updates.societe_livraison = 'TRANSPORTEUR';
+        else if (tournee)                    updates.societe_livraison = 'ATRIAL';
       }
       if (vehicule !== undefined) {
         if (vehicule !== null && !VALID_VEHICULES.includes(vehicule)) {
