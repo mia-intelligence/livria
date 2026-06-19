@@ -408,6 +408,46 @@ function closePhotoModal() {
 // Garder l'ancienne fonction pour la compat avec la liste (bouton Photo dans la card)
 function openPhotoModal(id) { openPhotoGallery(id); }
 
+// ── Optimiser itinéraire TomTom ───────────────────────────────
+async function optimizeRoute() {
+  const btn = document.getElementById('btn-optimize');
+  btn.disabled = true;
+  btn.textContent = 'Calcul en cours…';
+
+  try {
+    const date = new Date().toISOString().split('T')[0];
+    const res = await fetch('/api/routing/optimize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      alert(data.error || 'Erreur lors de l\'optimisation.');
+      return;
+    }
+
+    if (data.stops && data.stops.length) {
+      stops = data.stops;
+      renderStopsList();
+      updateSummary();
+      if (map) { markers.forEach(m => m.setMap(null)); markers = []; renderMap(stops); }
+    }
+
+    const veh = data.vehicule === 'PL' ? '🚛 PL' : '🚗 VL';
+    btn.textContent = `✓ Optimisé (${veh})`;
+    setTimeout(() => {
+      btn.textContent = 'Optimiser l\'itinéraire';
+      btn.disabled = false;
+    }, 3000);
+  } catch {
+    alert('Erreur réseau. Réessayez.');
+    btn.textContent = 'Optimiser l\'itinéraire';
+    btn.disabled = false;
+  }
+}
+
 // ── Utils ─────────────────────────────────────────────────────
 function esc(str) {
   if (!str) return '';
