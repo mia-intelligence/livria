@@ -75,14 +75,31 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: 'type_produit invalide' });
     }
 
+    // Géocodage automatique via TomTom
+    let geoLat = latitude || null;
+    let geoLng = longitude || null;
+    if (adresse && !geoLat && process.env.TOMTOM_API_KEY) {
+      try {
+        const query = encodeURIComponent(`${adresse}, France`);
+        const geoRes = await fetch(
+          `https://api.tomtom.com/search/2/geocode/${query}.json?key=${process.env.TOMTOM_API_KEY}&limit=1&countrySet=FR`
+        );
+        if (geoRes.ok) {
+          const geoData = await geoRes.json();
+          const pos = geoData?.results?.[0]?.position;
+          if (pos) { geoLat = pos.lat; geoLng = pos.lon; }
+        }
+      } catch { /* géocodage non-bloquant */ }
+    }
+
     const { data, error } = await db
       .from('stops')
       .insert({
         societe:           societe           || null,
         adresse:           adresse           || null,
         telephone:         telephone         || null,
-        latitude:          latitude          || null,
-        longitude:         longitude         || null,
+        latitude:          geoLat,
+        longitude:         geoLng,
         numero_affaire:    numero_affaire    || null,
         societe_livraison: societe_livraison || 'ATRIAL',
         tournee:           tournee           || null,

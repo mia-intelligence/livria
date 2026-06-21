@@ -418,6 +418,26 @@ function renderLogs(logs) {
   }).join('');
 }
 
+// ── Géocodage stops manquants ──────────────────────────────────
+async function geocodeMissing() {
+  const btn = document.getElementById('btn-geocode');
+  btn.disabled = true;
+  btn.textContent = '⏳ Géocodage…';
+  try {
+    const res = await fetch('/api/routing/geocode-missing', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) { showFeedback(data.error || 'Erreur', 'danger'); return; }
+    showFeedback(data.message, 'success');
+    // Recharger les stops si une date est sélectionnée
+    if (document.getElementById('debug-date').value) loadDebugStops();
+  } catch {
+    showFeedback('Erreur réseau', 'danger');
+  } finally {
+    btn.textContent = '📍 Géocoder manquants';
+    btn.disabled = false;
+  }
+}
+
 // ── Logout ─────────────────────────────────────────────────────
 async function logout() {
   await fetch('/api/auth/logout', { method: 'POST' });

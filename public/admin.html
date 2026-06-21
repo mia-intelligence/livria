@@ -124,6 +124,7 @@
         <div class="page-head">
           <div><h1>Debug stops</h1><div class="lead" id="stops-debug-lead">Sélectionner une date</div></div>
           <div style="display:flex;align-items:center;gap:10px;margin-left:auto">
+            <button class="btn" id="btn-geocode" onclick="geocodeMissing()">📍 Géocoder manquants</button>
             <input type="date" id="debug-date" onchange="loadDebugStops()"
               style="height:36px;border-radius:8px;border:1px solid var(--line);padding:0 10px;font:inherit;font-size:13px">
           </div>
