@@ -527,7 +527,7 @@ function renderTournee() {
       <tr>
         <td class="strong">${s.ordre ?? '—'}</td>
         <td class="strong">${esc(s.societe)}</td>
-        <td class="muted" style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.adresse)}</td>
+        <td class="muted" style="max-width:180px;white-space:normal;word-break:break-word;line-height:1.4">${esc(s.adresse || '—').replace(/,\s*(\d{5})/g, ',<br>$1')}</td>
         <td class="muted">${s.numero_affaire ? esc(s.numero_affaire) : '—'}</td>
         <td><span class="type-badge ${societeLivraison.toLowerCase()}">${TYPE_LABEL[societeLivraison] || societeLivraison}</span></td>
         <td class="muted" style="white-space:nowrap">
