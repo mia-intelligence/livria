@@ -45,6 +45,7 @@ module.exports = async function handler(req, res) {
       ordre,
       type_produit,
       groupe_livraison,
+      reference_client,
     } = req.body;
 
     if (!societe || !adresse || !societe_livraison) {
@@ -109,6 +110,7 @@ module.exports = async function handler(req, res) {
         date_tournee:      date_tournee      || new Date().toISOString().split('T')[0],
         type_produit:      type_produit      || null,
         groupe_livraison:  groupe_livraison  || null,
+        reference_client:  reference_client  || null,
       })
       .select('*, stop_photos(id, photo_url, created_at)')
       .single();

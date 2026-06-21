@@ -326,6 +326,7 @@ function openEditStop(id) {
   document.getElementById('es-colis').value            = s.nombre_colis || '';
   document.getElementById('es-emplacement').value      = s.emplacement || '';
   document.getElementById('es-type-produit').value     = s.type_produit || '';
+  document.getElementById('es-reference-client').value = s.reference_client || '';
   document.getElementById('es-groupe').value           = s.groupe_livraison || '';
 
   document.getElementById('edit-stop-modal').classList.remove('hidden');
@@ -354,6 +355,7 @@ async function saveEditStop() {
     nombre_colis:     parseInt(document.getElementById('es-colis').value) || null,
     emplacement:      document.getElementById('es-emplacement').value.trim() || null,
     type_produit:     document.getElementById('es-type-produit').value || null,
+    reference_client: document.getElementById('es-reference-client').value.trim() || null,
     groupe_livraison: document.getElementById('es-groupe').value.trim() || null,
   };
 

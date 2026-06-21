@@ -667,6 +667,7 @@ function openNewStopModal() {
   document.getElementById('ns-tournee').value         = '';
   document.getElementById('ns-vehicule').value        = '';
   document.getElementById('ns-type-produit').value    = '';
+  document.getElementById('ns-reference-client').value = '';
   document.getElementById('ns-groupe-livraison').value = '';
   document.getElementById('ns-date-tournee').value     = new Date().toISOString().split('T')[0];
   document.getElementById('modal-error').style.display = 'none';
@@ -685,6 +686,7 @@ async function createStop() {
   const tournee           = document.getElementById('ns-tournee').value;
   const vehicule          = document.getElementById('ns-vehicule').value;
   const type_produit      = document.getElementById('ns-type-produit').value || null;
+  const reference_client  = document.getElementById('ns-reference-client').value.trim() || null;
   const groupe_livraison  = document.getElementById('ns-groupe-livraison').value.trim() || null;
   const date_tournee      = document.getElementById('ns-date-tournee').value || new Date().toISOString().split('T')[0];
   const errEl             = document.getElementById('modal-error');
@@ -720,6 +722,7 @@ async function createStop() {
         tournee,
         vehicule,
         type_produit,
+        reference_client,
         groupe_livraison,
         date_tournee,
       })

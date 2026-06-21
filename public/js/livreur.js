@@ -70,13 +70,13 @@ function renderStopsList() {
     return;
   }
 
-  // Grouper visuellement les stops liés (même groupe_livraison)
-  const groupMap = {};
+  // Grouper visuellement : reference_client en priorité, sinon societe
+  const groupCount = {};
   stops.forEach(s => {
-    if (s.groupe_livraison) {
-      if (!groupMap[s.groupe_livraison]) groupMap[s.groupe_livraison] = [];
-      groupMap[s.groupe_livraison].push(s.id);
-    }
+    const key = s.reference_client
+      ? `ref:${s.reference_client.trim().toLowerCase()}`
+      : `soc:${(s.societe || '').trim().toLowerCase()}`;
+    groupCount[key] = (groupCount[key] || 0) + 1;
   });
 
   container.innerHTML = stops.map((s, i) => {
@@ -89,9 +89,11 @@ function renderStopsList() {
       ? `<span style="display:inline-flex;align-items:center;background:${s.type_produit === 'PVC' ? '#E8F4FD' : '#FDF0E8'};color:${s.type_produit === 'PVC' ? '#1A6FA8' : '#A85A1A'};border-radius:6px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:4px">${esc(s.type_produit)}</span>`
       : '';
 
-    // Indicateur groupe livraison
-    const groupIds = s.groupe_livraison ? (groupMap[s.groupe_livraison] || []) : [];
-    const isGrouped = groupIds.length > 1;
+    // Indicateur groupe livraison (reference_client ou société)
+    const groupKey = s.reference_client
+      ? `ref:${s.reference_client.trim().toLowerCase()}`
+      : `soc:${(s.societe || '').trim().toLowerCase()}`;
+    const isGrouped = (groupCount[groupKey] || 0) > 1;
     const groupBadge = isGrouped
       ? `<span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--ink-mute);margin-left:6px">🔗 Livraison groupée</span>`
       : '';
