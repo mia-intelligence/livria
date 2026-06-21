@@ -677,6 +677,14 @@ function closeNewStopModal() {
   document.getElementById('new-stop-modal').classList.add('hidden');
 }
 
+function onNsTourneeChange() {
+  const tournee = document.getElementById('ns-tournee').value;
+  const typeEl  = document.getElementById('ns-type');
+  if (tournee === 'ENLEVEMENT')   typeEl.value = 'ENLEVEMENT';
+  else if (tournee === 'TRANSPORTEUR') typeEl.value = 'TRANSPORTEUR';
+  else if (tournee)               typeEl.value = 'ATRIAL';
+}
+
 async function createStop() {
   const societe           = document.getElementById('ns-societe').value.trim();
   const adresse           = document.getElementById('ns-adresse').value.trim();

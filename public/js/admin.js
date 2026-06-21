@@ -216,7 +216,7 @@ async function confirmResetPwd() {
     }
     const user = users.find(u => u.id === pendingResetId);
     closeResetPwdModal();
-    showFeedback(`Mot de passe de ${user?.prenom} ${user?.nom} réinitialisé.`, 'success');
+    showFeedback(`Mot de passe de ${user?.prenom} ${user?.nom} réinitialisé. Communiquez le nouveau mot de passe à l'utilisateur.`, 'success');
   } catch {
     errEl.textContent = 'Erreur réseau. Réessayez.';
     errEl.style.display = 'block';

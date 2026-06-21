@@ -117,3 +117,17 @@ CREATE TRIGGER stops_updated_at
 -- ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
 -- Note : la gestion des droits est assurée par l'API (middleware auth)
 -- RLS peut être activé en V2 pour une sécurité renforcée côté DB.
+
+
+-- ── Table : activity_logs ────────────────────────────────────────
+-- À créer dans Supabase Dashboard > SQL Editor
+CREATE TABLE IF NOT EXISTS activity_logs (
+  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_email  TEXT,
+  action      TEXT NOT NULL,
+  details     JSONB DEFAULT '{}',
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS activity_logs_created_at_idx ON activity_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS activity_logs_user_email_idx ON activity_logs(user_email);

@@ -2,7 +2,7 @@
 
 let stops = [];
 let map = null;
-let markers = [];
+let markerById = {};
 let activeStopId = null;
 let photoGallery = [];  // photos du stop actif pour le modal
 let photoGalleryIndex = 0;
@@ -41,11 +41,9 @@ async function loadStops() {
     const res = await fetch('/api/stops');
     if (res.status === 401) { window.location.href = '/'; return; }
     stops = await res.json();
-    window._stops = stops;
-    window._stopsReady = true;
     renderStopsList();
     updateSummary();
-    if (window._mapReady) renderMap(stops);
+    renderMap(stops);
   } catch {
     document.getElementById('stops-list').innerHTML =
       '<div style="text-align:center;padding:40px;color:var(--danger)">Erreur de chargement. Actualisez la page.</div>';
@@ -143,49 +141,47 @@ function renderStopsList() {
   }).join('');
 }
 
-// ── Google Maps ───────────────────────────────────────────────
+// ── Carte Leaflet/OSM ─────────────────────────────────────────
 function renderMap(stopsData) {
-  if (!stopsData.length) return;
+  if (!map) {
+    map = L.map('livreur-map', { zoomControl: true, attributionControl: false });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+    }).addTo(map);
+  }
+
+  // Supprimer marqueurs existants
+  Object.values(markerById).forEach(m => map.removeLayer(m));
+  markerById = {};
 
   const located = stopsData.filter(s => s.latitude && s.longitude);
-  const center  = located.length
-    ? { lat: located[0].latitude, lng: located[0].longitude }
-    : { lat: 43.3, lng: 5.9 };
+  if (!located.length) return;
 
-  map = new google.maps.Map(document.getElementById('livreur-map'), {
-    center,
-    zoom: 10,
-    disableDefaultUI: true,
-    zoomControl: true,
-    styles: [
-      { featureType: 'poi', stylers: [{ visibility: 'off' }] },
-      { featureType: 'transit', stylers: [{ visibility: 'off' }] },
-    ],
-  });
-
-  markers = [];
-  const bounds = new google.maps.LatLngBounds();
+  const bounds = [];
 
   stopsData.forEach((s, i) => {
     if (!s.latitude || !s.longitude) return;
-    const pos   = { lat: s.latitude, lng: s.longitude };
-    bounds.extend(pos);
     const sc    = STATUS_CLASS[s.statut] || 'todo';
     const color = { done: '#3DBE7A', now: '#F2A93B', todo: '#9AA3AD' }[sc];
+    const num   = s.ordre ?? (i + 1);
 
-    const marker = new google.maps.Marker({
-      position: pos,
-      map,
-      label: { text: String(s.ordre ?? (i + 1)), color: '#fff', fontWeight: '700', fontSize: '12px' },
-      icon:  { path: google.maps.SymbolPath.CIRCLE, scale: 14, fillColor: color, fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2 },
-      title: s.societe,
+    const icon = L.divIcon({
+      className: '',
+      html: `<div style="width:28px;height:28px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:12px;font-family:Inter,sans-serif">${num}</div>`,
+      iconSize: [28, 28],
+      iconAnchor: [14, 14],
     });
 
-    marker.addListener('click', () => openSheet(s.id));
-    markers.push(marker);
+    const m = L.marker([s.latitude, s.longitude], { icon })
+      .addTo(map)
+      .on('click', () => openSheet(s.id));
+
+    markerById[s.id] = m;
+    bounds.push([s.latitude, s.longitude]);
   });
 
-  if (located.length > 1) map.fitBounds(bounds, { padding: 40 });
+  if (bounds.length > 1) map.fitBounds(bounds, { padding: [40, 40] });
+  else if (bounds.length === 1) map.setView(bounds[0], 13);
 }
 
 // ── Stop detail sheet ─────────────────────────────────────────
@@ -285,14 +281,11 @@ function renderStatusActions(stop) {
     A_LIVRER: [{ statut: 'EN_COURS', label: 'Démarrer la livraison', cls: 'active-now' }],
     EN_COURS: [{ statut: 'LIVRE',    label: 'Marquer comme livré',   cls: 'active-done' },
                { statut: 'A_LIVRER', label: 'Remettre en attente',   cls: '' }],
-    LIVRE:    [],
+    LIVRE:    [{ statut: 'A_LIVRER', label: 'Annuler la livraison', cls: '' }],
   };
   const actions = transitions[stop.statut] || [];
 
-  if (!actions.length) {
-    container.innerHTML = '<p style="text-align:center;color:var(--ink-mute);font-size:13px">Livraison terminée ✓</p>';
-    return;
-  }
+  if (!actions.length) return;
 
   container.innerHTML = actions.map(a => {
     const isStart = a.statut === 'EN_COURS';
@@ -341,12 +334,18 @@ async function changeStatus(id, newStatut) {
 }
 
 function updateMapMarker(stop) {
-  if (!map) return;
-  const i = stops.findIndex(s => s.id === stop.id);
-  if (i === -1 || !markers[i]) return;
+  if (!map || !markerById[stop.id]) return;
   const sc    = STATUS_CLASS[stop.statut] || 'todo';
   const color = { done: '#3DBE7A', now: '#F2A93B', todo: '#9AA3AD' }[sc];
-  markers[i].setIcon({ path: google.maps.SymbolPath.CIRCLE, scale: 14, fillColor: color, fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2 });
+  const i     = stops.findIndex(s => s.id === stop.id);
+  const num   = stop.ordre ?? (i + 1);
+  const icon  = L.divIcon({
+    className: '',
+    html: `<div style="width:28px;height:28px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:12px;font-family:Inter,sans-serif">${num}</div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+  });
+  markerById[stop.id].setIcon(icon);
 }
 
 // ── Galerie photos ────────────────────────────────────────────
@@ -434,7 +433,7 @@ async function optimizeRoute() {
       stops = data.stops;
       renderStopsList();
       updateSummary();
-      if (map) { markers.forEach(m => m.setMap(null)); markers = []; renderMap(stops); }
+      if (map) { Object.values(markerById).forEach(m => map.removeLayer(m)); markerById = {}; renderMap(stops); }
     }
 
     const veh = data.vehicule === 'PL' ? '🚛 PL' : '🚗 VL';
@@ -448,6 +447,12 @@ async function optimizeRoute() {
     btn.textContent = 'Optimiser l\'itinéraire';
     btn.disabled = false;
   }
+}
+
+// ── Auth ──────────────────────────────────────────────────────
+async function logout() {
+  await fetch('/api/auth/logout', { method: 'POST' });
+  window.location.href = '/';
 }
 
 // ── Utils ─────────────────────────────────────────────────────

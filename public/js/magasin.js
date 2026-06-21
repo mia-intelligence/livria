@@ -39,6 +39,11 @@ function getTabDate() {
   return d.toISOString().split('T')[0];
 }
 
+async function logout() {
+  await fetch('/api/auth/logout', { method: 'POST' });
+  window.location.href = '/';
+}
+
 async function checkAuth() {
   try {
     const res = await fetch('/api/auth/me');
