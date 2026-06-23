@@ -16,7 +16,7 @@ module.exports = async function handler(req, res) {
 
       const { data, error } = await db
         .from('stops')
-        .select('date_tournee, statut')
+        .select('date_tournee, statut, reference_client, societe')
         .gte('date_tournee', from)
         .lte('date_tournee', to);
 
@@ -26,11 +26,13 @@ module.exports = async function handler(req, res) {
       for (const stop of data) {
         const d = stop.date_tournee;
         if (!d) continue;
-        if (!result[d]) result[d] = { total: 0, livre: 0, en_cours: 0, a_livrer: 0 };
+        if (!result[d]) result[d] = { total: 0, livre: 0, en_cours: 0, a_livrer: 0, clients: [] };
         result[d].total++;
         if (stop.statut === 'LIVRE')         result[d].livre++;
         else if (stop.statut === 'EN_COURS') result[d].en_cours++;
         else                                 result[d].a_livrer++;
+        const label = stop.reference_client || stop.societe || null;
+        if (label && !result[d].clients.includes(label)) result[d].clients.push(label);
       }
       return res.status(200).json(result);
     }

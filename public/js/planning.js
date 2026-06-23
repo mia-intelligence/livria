@@ -148,6 +148,7 @@
           </div>
           <div class="pdc-count">${info.total > 0 ? info.total : '<span class="pdc-empty">—</span>'}</div>
           ${info.total > 0 ? `<div class="pdc-label">stop${info.total > 1 ? 's' : ''}</div>` : ''}
+          ${info.total > 0 && info.clients && info.clients.length > 0 ? renderClients(info.clients) : ''}
           ${info.total > 0 ? renderBar(info) : ''}
         </div>`;
     }
@@ -235,6 +236,18 @@
       html += '</div></div>';
     }
 
+    html += '</div>';
+    return html;
+  }
+
+  /* ── Liste clients ────────────────────────────────────────── */
+  function renderClients(clients) {
+    const MAX = 4;
+    const shown = clients.slice(0, MAX);
+    const rest  = clients.length - MAX;
+    let html = '<div class="pdc-clients">';
+    for (const c of shown) html += `<div class="pdc-client-tag">${c}</div>`;
+    if (rest > 0) html += `<div class="pdc-client-more">+${rest}</div>`;
     html += '</div>';
     return html;
   }
