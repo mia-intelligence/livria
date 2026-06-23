@@ -102,7 +102,8 @@ function setTopbarDate() {
 const SECTION_TITLES = {
   dashboard: 'Tableau de bord',
   affaires: 'Affaires à planifier',
-  tournee: 'Tournée du jour'
+  tournee: 'Tournée du jour',
+  planning: 'Planning des livraisons'
 };
 
 function showSection(name) {
@@ -114,6 +115,8 @@ function showSection(name) {
   });
 
   document.getElementById('topbar-title').textContent = SECTION_TITLES[name] || name;
+
+  if (name === 'planning') initPlanning();
 }
 
 // ── Load stops ─────────────────────────────────────────────────

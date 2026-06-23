@@ -307,6 +307,87 @@ html, body {
 .chip.active { background: var(--turquoise-soft); border-color: var(--turquoise); color: var(--turquoise-dark); }
 
 /* ============================================================
+   PLANNING
+   ============================================================ */
+.planning-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 20px; flex-wrap: wrap;
+}
+.planning-mode-toggle { display: flex; gap: 6px; }
+.planning-nav { display: flex; gap: 6px; }
+.planning-period-label {
+  font-size: 13.5px; font-weight: 700; color: var(--ink);
+  margin-bottom: 16px;
+}
+
+/* Week grid */
+.planning-week-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px;
+}
+.planning-day-cell {
+  border: 1px solid var(--line); border-radius: 12px;
+  padding: 14px 12px; background: var(--bg);
+  display: flex; flex-direction: column; align-items: center;
+  min-height: 110px; transition: border-color .15s;
+}
+.planning-day-cell.today { border-color: var(--turquoise); background: var(--turquoise-soft); }
+.planning-day-cell.weekend { background: var(--canvas); }
+.pdc-head { width: 100%; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+.pdc-dayname { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-soft); }
+.pdc-date { font-size: 11px; color: var(--ink-mute); }
+.pdc-count { font-size: 30px; font-weight: 800; color: var(--ink); line-height: 1; }
+.pdc-empty { font-size: 20px; font-weight: 400; color: var(--ink-mute); }
+.pdc-label { font-size: 11px; color: var(--ink-mute); margin-top: 2px; }
+.pdc-bar { display: flex; width: 100%; height: 5px; border-radius: 3px; overflow: hidden; margin-top: auto; padding-top: 10px; gap: 1px; }
+.pdc-bar div { height: 100%; border-radius: 2px; }
+
+/* Month grid */
+.planning-month-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px;
+}
+.pmg-header {
+  text-align: center; font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .06em;
+  color: var(--ink-mute); padding-bottom: 6px;
+}
+.pmg-cell {
+  border: 1px solid var(--line-soft); border-radius: 8px;
+  min-height: 56px; padding: 6px;
+  background: var(--bg); display: flex; flex-direction: column; align-items: center;
+}
+.pmg-cell.empty { background: transparent; border-color: transparent; }
+.pmg-cell.today { border-color: var(--turquoise); background: var(--turquoise-soft); }
+.pmg-cell.weekend { background: var(--canvas); }
+.pmg-day { font-size: 12px; font-weight: 600; color: var(--ink); }
+.pmg-count {
+  margin-top: 4px; font-size: 18px; font-weight: 800; color: var(--turquoise-dark);
+  line-height: 1;
+}
+
+/* Quarter grid */
+.planning-quarter-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
+}
+.pqg-month { border: 1px solid var(--line); border-radius: 12px; padding: 14px; background: var(--bg); }
+.pqg-month-name { font-size: 13px; font-weight: 700; margin-bottom: 10px; color: var(--ink); }
+.pqg-mini-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.pqg-mini-header {
+  text-align: center; font-size: 9px; font-weight: 700;
+  color: var(--ink-mute); padding-bottom: 3px;
+}
+.pqg-mini-cell {
+  border-radius: 4px; min-height: 28px; padding: 2px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: var(--canvas);
+}
+.pqg-mini-cell.empty { background: transparent; }
+.pqg-mini-cell.today { background: var(--turquoise-soft); }
+.pqg-mini-cell.weekend { opacity: .6; }
+.pqg-mini-cell.has-stops { background: #E6F6F6; }
+.pqg-day-num { font-size: 9px; color: var(--ink-soft); }
+.pqg-count { font-size: 10px; font-weight: 800; color: var(--turquoise-dark); line-height: 1; }
+
+/* ============================================================
    LOGIN PAGE
    ============================================================ */
 .login-page {
