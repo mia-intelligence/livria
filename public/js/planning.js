@@ -80,7 +80,7 @@
     wrapper.innerHTML = '<div style="color:var(--ink-mute);font-size:13px;text-align:center;padding:40px 0">Chargement…</div>';
 
     const { from, to } = dateRange();
-    fetch(`/api/planning?from=${from}&to=${to}`)
+    fetch(`/api/stops?planning=true&from=${from}&to=${to}`)
       .then(r => r.json())
       .then(data => renderGrid(data, from, to))
       .catch(() => {
