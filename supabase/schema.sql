@@ -46,6 +46,14 @@ CREATE TABLE IF NOT EXISTS stops (
   photo_url          TEXT,
   magasin_valide     BOOLEAN     NOT NULL DEFAULT FALSE,
   magasin_valide_at  TIMESTAMPTZ,
+  -- Champs V3 : commentaire magasin, confirmation livreur, type produit
+  commentaire_magasin    TEXT,
+  livreur_colis_confirme BOOLEAN NOT NULL DEFAULT FALSE,
+  type_produit           TEXT    CHECK (type_produit IS NULL OR type_produit = ANY (ARRAY['PVC','ALU','MIXTE'])),
+  groupe_livraison       TEXT,
+  -- Champs V4 : référence client (planning) et colis réellement livrés
+  reference_client       TEXT,
+  colis_livres           INTEGER CHECK (colis_livres IS NULL OR colis_livres >= 0),
   created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -78,14 +86,21 @@ CREATE TABLE IF NOT EXISTS stops (
 -- ALTER TABLE stops ADD COLUMN IF NOT EXISTS groupe_livraison TEXT;
 
 -- ── Migration V4 (référence client, colis livrés) ──────────────
--- Exécuter dans l'éditeur SQL Supabase :
+-- À exécuter sur une base existante, dans l'éditeur SQL Supabase.
+-- Idempotent : sans effet et sans erreur si déjà appliqué.
 --
 -- ALTER TABLE stops ADD COLUMN IF NOT EXISTS reference_client TEXT;
 -- ALTER TABLE stops ADD COLUMN IF NOT EXISTS colis_livres INTEGER;
+--
+-- Contrôle :
+-- SELECT column_name FROM information_schema.columns
+--  WHERE table_name = 'stops' AND column_name IN ('reference_client','colis_livres');
 
 -- Index pour les requêtes courantes
-CREATE INDEX IF NOT EXISTS stops_date_idx  ON stops (date_tournee);
-CREATE INDEX IF NOT EXISTS stops_type_idx  ON stops (type);
+CREATE INDEX IF NOT EXISTS stops_date_idx   ON stops (date_tournee);
+-- NB : l'index portait sur une colonne « type » qui n'existe pas —
+-- le champ réel est societe_livraison, filtré à chaque chargement.
+CREATE INDEX IF NOT EXISTS stops_societe_livraison_idx ON stops (societe_livraison);
 CREATE INDEX IF NOT EXISTS stops_statut_idx ON stops (statut);
 
 -- ── Table : sessions ────────────────────────────────────────────
