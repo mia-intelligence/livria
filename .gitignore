@@ -8,3 +8,7 @@ node_modules/
 supabase/.temp/
 key.txt
 *.key.txt
+
+# Données et outils locaux (non déployés)
+BL/
+scripts/
