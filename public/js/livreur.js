@@ -429,15 +429,20 @@ function renderColisLivres(stop) {
     return;
   }
 
-  // Rappel du colissage préparé par le magasin
-  if (stop.nombre_colis || stop.emplacement) {
-    const bits = [];
-    if (stop.nombre_colis) bits.push(`<b style="color:var(--turquoise-dark)">${stop.nombre_colis} colis</b>`);
-    if (stop.emplacement)  bits.push(esc(stop.emplacement));
-    prep.innerHTML = `Préparé par le magasin : ${bits.join(' · ')}`;
-    prep.style.display = 'block';
+  // Rappel du colissage saisi par le magasin — toujours affiché, y
+  // compris quand l'information manque : le livreur doit savoir ce qui
+  // était attendu, ou qu'il n'y a rien d'annoncé.
+  prep.style.display = 'block';
+  if (stop.nombre_colis) {
+    const bits = [`<b style="color:var(--turquoise-dark)">${stop.nombre_colis} colis à livrer</b>`];
+    if (stop.emplacement) bits.push(esc(stop.emplacement));
+    prep.innerHTML = `Annoncé par le magasin : ${bits.join(' · ')}`;
+  } else if (stop.emplacement) {
+    prep.innerHTML = `Annoncé par le magasin : ${esc(stop.emplacement)} — `
+                   + '<span style="color:#8A5A12">nombre de colis non renseigné</span>';
   } else {
-    prep.style.display = 'none';
+    prep.innerHTML = '<span style="color:#8A5A12">⚠ Le magasin n\'a pas renseigné '
+                   + 'le nombre de colis pour ce stop.</span>';
   }
 
   att.textContent = stop.nombre_colis ? ` sur les ${stop.nombre_colis} prévus` : '';
