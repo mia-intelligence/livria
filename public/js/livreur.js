@@ -416,22 +416,44 @@ function onColisCheckChange() {
 }
 
 // ── « J'ai livré ___ colis » ──────────────────────────────────
-// Visible dès que la livraison est démarrée ou terminée. La saisie
-// est enregistrée au passage en LIVRE (ou immédiatement si déjà livré).
+// Visible dès que la livraison est démarrée. La saisie conditionne le
+// passage en LIVRE : c'est elle qui valide la livraison.
 function renderColisLivres(stop) {
   const el   = document.getElementById('sheet-colis-livres');
   const inp  = document.getElementById('in-colis-livres');
   const att  = document.getElementById('colis-livres-attendu');
+  const prep = document.getElementById('colis-livres-prepare');
 
   if (stop.statut === 'A_LIVRER') {
     el.style.display = 'none';
     return;
   }
 
+  // Rappel du colissage préparé par le magasin
+  if (stop.nombre_colis || stop.emplacement) {
+    const bits = [];
+    if (stop.nombre_colis) bits.push(`<b style="color:var(--turquoise-dark)">${stop.nombre_colis} colis</b>`);
+    if (stop.emplacement)  bits.push(esc(stop.emplacement));
+    prep.innerHTML = `Préparé par le magasin : ${bits.join(' · ')}`;
+    prep.style.display = 'block';
+  } else {
+    prep.style.display = 'none';
+  }
+
   att.textContent = stop.nombre_colis ? ` sur les ${stop.nombre_colis} prévus` : '';
   inp.value = (stop.colis_livres ?? '') === '' ? '' : String(stop.colis_livres);
   el.style.display = 'block';
   renderColisEcart(stop);
+}
+
+// Saisie valide = entier >= 0. Conditionne le bouton « Marquer comme livré ».
+function colisLivresValue() {
+  const inp = document.getElementById('in-colis-livres');
+  if (!inp) return null;
+  const val = inp.value.trim();
+  if (val === '') return null;
+  const n = parseInt(val, 10);
+  return Number.isNaN(n) || n < 0 ? null : n;
 }
 
 function renderColisEcart(stop) {
@@ -452,33 +474,45 @@ function renderColisEcart(stop) {
 
 function onColisLivresInput() {
   const stop = stops.find(s => s.id === activeStopId);
-  if (stop) renderColisEcart(stop);
+  if (!stop) return;
+  renderColisEcart(stop);
+  renderStatusActions(stop);   // débloque « Marquer comme livré »
 }
 
+// Renvoie true si la livraison peut être clôturée.
 async function saveColisLivres(id) {
-  const inp = document.getElementById('in-colis-livres');
-  if (!inp || inp.offsetParent === null) return;      // champ masqué
-  const val = inp.value.trim();
-  if (val === '') return;
-
-  const n = parseInt(val, 10);
-  if (Number.isNaN(n) || n < 0) return;
+  const n = colisLivresValue();
+  if (n === null) return false;   // le bouton est déjà désactivé dans ce cas
 
   try {
-    await fetch(`/api/stops/${id}`, {
+    const res = await fetch(`/api/stops/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ colis_livres: n }),
     });
+    if (!res.ok) throw new Error();
     const stop = stops.find(s => s.id === id);
     if (stop) stop.colis_livres = n;
-  } catch { /* non-bloquant : le statut prime */ }
+    return true;
+  } catch {
+    // Ne pas perdre l'information en silence : le livreur tranche.
+    return confirm(
+      'Le nombre de colis livrés n\'a pas pu être enregistré (problème réseau ou serveur).\n\n' +
+      'Marquer quand même le stop comme livré ?'
+    );
+  }
 }
 
 function renderStatusActions(stop) {
   const container = document.getElementById('status-actions');
   const cbChecked = document.getElementById('cb-colis-confirme')?.checked;
   const needsCheck = stop.magasin_valide && stop.nombre_colis && stop.statut === 'A_LIVRER';
+
+  // La phrase « J'ai livré ___ colis » vaut validation de la livraison :
+  // sans nombre saisi, on ne peut pas clôturer le stop.
+  const needsColis = stop.statut === 'EN_COURS' && colisLivresValue() === null;
+  const requisEl = document.getElementById('colis-livres-requis');
+  if (requisEl) requisEl.style.display = needsColis ? 'block' : 'none';
 
   const transitions = {
     A_LIVRER: [{ statut: 'EN_COURS', label: 'Démarrer la livraison', cls: 'active-now' }],
@@ -492,8 +526,16 @@ function renderStatusActions(stop) {
 
   container.innerHTML = actions.map(a => {
     const isStart = a.statut === 'EN_COURS';
-    const disabled = isStart && needsCheck && !cbChecked ? 'disabled' : '';
-    const title = isStart && needsCheck && !cbChecked ? 'Confirmez la prise en charge des colis d\'abord' : '';
+    const isDone  = a.statut === 'LIVRE';
+
+    const blockStart = isStart && needsCheck && !cbChecked;
+    const blockDone  = isDone  && needsColis;
+
+    const disabled = blockStart || blockDone ? 'disabled' : '';
+    let title = '';
+    if (blockStart) title = 'Confirmez la prise en charge des colis d\'abord';
+    if (blockDone)  title = 'Indiquez le nombre de colis livrés d\'abord';
+
     return `<button class="status-btn ${a.cls}" onclick="changeStatus('${stop.id}','${a.statut}')" ${disabled} title="${title}">${a.label}</button>`;
   }).join('');
 }
@@ -513,8 +555,12 @@ async function changeStatus(id, newStatut) {
     } catch { /* non-bloquant */ }
   }
 
-  // Enregistrer le nombre de colis livrés avant de clôturer le stop
-  if (newStatut === 'LIVRE') await saveColisLivres(id);
+  // Le nombre de colis livrés valide la livraison : il doit être
+  // enregistré avant que le stop passe en LIVRE.
+  if (newStatut === 'LIVRE') {
+    const saved = await saveColisLivres(id);
+    if (!saved) return;
+  }
 
   try {
     const res = await fetch(`/api/stops/${id}`, {
