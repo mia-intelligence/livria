@@ -16,34 +16,57 @@ module.exports = async function handler(req, res) {
 
       const { data, error } = await db
         .from('stops')
-        .select('date_tournee, statut, reference_client, societe')
+        .select('date_tournee, statut, reference_client, societe, numero_affaire, tournee')
         .gte('date_tournee', from)
         .lte('date_tournee', to);
 
       if (error) return res.status(500).json({ error: error.message });
 
       const result = {};
+      const seen   = {}; // date -> Set de clés d'entrées déjà ajoutées
       for (const stop of data) {
         const d = stop.date_tournee;
         if (!d) continue;
-        if (!result[d]) result[d] = { total: 0, livre: 0, en_cours: 0, a_livrer: 0, clients: [] };
+        if (!result[d]) {
+          result[d] = { total: 0, livre: 0, en_cours: 0, a_livrer: 0, clients: [], affaires: [], entries: [] };
+          seen[d] = new Set();
+        }
         result[d].total++;
         if (stop.statut === 'LIVRE')         result[d].livre++;
         else if (stop.statut === 'EN_COURS') result[d].en_cours++;
         else                                 result[d].a_livrer++;
-        const label = stop.reference_client || stop.societe || null;
-        if (label && !result[d].clients.includes(label)) result[d].clients.push(label);
+
+        const client  = stop.reference_client || stop.societe || null;
+        const affaire = stop.numero_affaire || null;
+        if (client && !result[d].clients.includes(client))    result[d].clients.push(client);
+        if (affaire && !result[d].affaires.includes(affaire)) result[d].affaires.push(affaire);
+
+        if (client || affaire) {
+          const key = `${affaire || ''}|${client || ''}`;
+          if (!seen[d].has(key)) {
+            seen[d].add(key);
+            result[d].entries.push({ affaire, client, tournee: stop.tournee || null, statut: stop.statut });
+          }
+        }
       }
       return res.status(200).json(result);
     }
 
+    // Plage de dates : ?from=YYYY-MM-DD&to=YYYY-MM-DD (vue semaine magasin)
+    const { from: rFrom, to: rTo } = req.query;
     const date = req.query.date || new Date().toISOString().split('T')[0];
 
-    let query = db
-      .from('stops')
-      .select('*, stop_photos(id, photo_url, created_at)')
-      .eq('date_tournee', date)
-      .order('ordre', { ascending: true });
+    let query = db.from('stops').select('*, stop_photos(id, photo_url, created_at)');
+
+    if (rFrom && rTo) {
+      query = query
+        .gte('date_tournee', rFrom)
+        .lte('date_tournee', rTo)
+        .order('date_tournee', { ascending: true })
+        .order('ordre', { ascending: true });
+    } else {
+      query = query.eq('date_tournee', date).order('ordre', { ascending: true });
+    }
 
     if (role === 'LIVREUR') {
       query = query.eq('societe_livraison', 'ATRIAL');

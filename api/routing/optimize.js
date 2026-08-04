@@ -5,12 +5,18 @@ module.exports = async function handler(req, res) {
   const session = await requireAuth(req, res);
   if (!session) return;
 
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Méthode non autorisée' });
+  if (!['GET', 'POST'].includes(req.method)) {
+    return res.status(405).json({ error: 'Méthode non autorisée' });
+  }
 
   const apiKey = process.env.TOMTOM_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'Clé TomTom non configurée' });
 
   const db = getDB();
+
+  // GET → feuille de route détaillée (turn-by-turn) de la tournée du jour
+  if (req.method === 'GET') return directions(req, res, db, apiKey);
+
   const date = req.body.date || new Date().toISOString().split('T')[0];
 
   // Charger les stops du jour avec coordonnées
@@ -106,3 +112,123 @@ module.exports = async function handler(req, res) {
     stops: refreshed || [],
   });
 };
+
+/* ── Feuille de route turn-by-turn ─────────────────────────────
+   GET /api/routing/optimize?date=YYYY-MM-DD&start=lat,lon
+   `start` (optionnel) = position actuelle du livreur. Sans lui, la
+   route démarre au premier stop de la tournée.
+   ────────────────────────────────────────────────────────────── */
+async function directions(req, res, db, apiKey) {
+  const date = req.query.date || new Date().toISOString().split('T')[0];
+
+  const { data: stops, error } = await db
+    .from('stops')
+    .select('id, societe, adresse, latitude, longitude, ordre, vehicule, statut')
+    .eq('date_tournee', date)
+    .eq('societe_livraison', 'ATRIAL')
+    .neq('statut', 'LIVRE')
+    .order('ordre', { ascending: true });
+
+  if (error) return res.status(500).json({ error: error.message });
+
+  const located = (stops || []).filter(s => s.latitude && s.longitude);
+
+  // Point de départ optionnel (géolocalisation du livreur)
+  let startPoint = null;
+  if (req.query.start) {
+    const [la, lo] = String(req.query.start).split(',').map(Number);
+    if (Number.isFinite(la) && Number.isFinite(lo)) startPoint = { latitude: la, longitude: lo };
+  }
+
+  const points = startPoint ? [startPoint, ...located] : located;
+  if (points.length < 2) {
+    return res.status(200).json({
+      legs: [],
+      message: 'Itinéraire indisponible : il faut au moins deux points géolocalisés.',
+    });
+  }
+
+  const isPL = (stops || []).some(s => s.vehicule === 'PL');
+
+  const path = points
+    .map(p => `${p.latitude},${p.longitude}`)
+    .join(':');
+
+  const params = new URLSearchParams({
+    key: apiKey,
+    instructionsType: 'text',
+    language: 'fr-FR',
+    traffic: 'true',
+    travelMode: isPL ? 'truck' : 'car',
+  });
+  if (isPL) {
+    params.set('vehicleWeight', '26000');
+    params.set('vehicleAxleWeight', '11500');
+    params.set('vehicleHeight', '4.0');
+    params.set('vehicleWidth', '2.55');
+    params.set('vehicleLength', '16.5');
+  }
+
+  // Le séparateur `:` entre points fait partie de la syntaxe du path TomTom
+  // — ne pas l'encoder.
+  const ttRes = await fetch(
+    `https://api.tomtom.com/routing/1/calculateRoute/${path}/json?${params}`
+  );
+
+  if (!ttRes.ok) {
+    const detail = await ttRes.text();
+    console.error('TomTom directions error:', detail);
+    return res.status(502).json({ error: 'Erreur TomTom Routing', detail });
+  }
+
+  const ttData = await ttRes.json();
+  const route  = ttData?.routes?.[0];
+  if (!route) return res.status(502).json({ error: 'Réponse TomTom invalide' });
+
+  const instructions = route.guidance?.instructions || [];
+  const ttLegs       = route.legs || [];
+
+  // Bornes cumulées de chaque leg pour répartir les instructions
+  const bounds = [];
+  let cumul = 0;
+  for (const leg of ttLegs) {
+    cumul += leg.summary?.lengthInMeters || 0;
+    bounds.push(cumul);
+  }
+
+  // Destination de chaque leg : startPoint décale l'index de 1
+  const legs = ttLegs.map((leg, i) => {
+    const dest = startPoint ? located[i] : located[i + 1];
+    return {
+      stop_id:    dest?.id      || null,
+      societe:    dest?.societe || '—',
+      adresse:    dest?.adresse || '',
+      distance_m: leg.summary?.lengthInMeters || 0,
+      duree_s:    leg.summary?.travelTimeInSeconds || 0,
+      steps:      [],
+    };
+  });
+
+  for (const ins of instructions) {
+    const offset = ins.routeOffsetInMeters || 0;
+    let idx = bounds.findIndex(b => offset < b);
+    if (idx === -1) idx = legs.length - 1;
+    if (!legs[idx]) continue;
+    legs[idx].steps.push({
+      text:       ins.message || ins.maneuver || '',
+      maneuver:   ins.maneuver || null,
+      rue:        ins.street || null,
+      distance_m: offset,
+    });
+  }
+
+  return res.status(200).json({
+    vehicule: isPL ? 'PL' : 'VL',
+    depart:   startPoint ? 'Position actuelle' : (located[0]?.societe || '—'),
+    total: {
+      distance_m: route.summary?.lengthInMeters || 0,
+      duree_s:    route.summary?.travelTimeInSeconds || 0,
+    },
+    legs,
+  });
+}

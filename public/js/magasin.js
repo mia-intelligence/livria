@@ -5,7 +5,11 @@ let activePrepId = null;
 let pendingPhotos = [];   // {base64, type} — photos à uploader
 let existingPhotos = [];  // {id, photo_url} — photos déjà en DB
 
-let activeTab = 'today';
+let activeTab = 'today';       // 'today' | 'tomorrow' | 'week'
+let weekAnchor = startOfWeek(new Date()); // lundi de la semaine affichée
+
+const DAYS_FR   = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+const MONTHS_FR = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
 
 // ── Init ──────────────────────────────────────────────────────
 async function init() {
@@ -14,29 +18,62 @@ async function init() {
   await loadStops();
 }
 
-// ── Onglets Aujourd'hui / Demain ──────────────────────────────
+// ── Onglets Aujourd'hui / Demain / Semaine ────────────────────
+const TABS = { today: 'tab-today', tomorrow: 'tab-tomorrow', week: 'tab-week' };
+
 function switchTab(tab) {
   activeTab = tab;
-  const isToday = tab === 'today';
 
-  const btnToday    = document.getElementById('tab-today');
-  const btnTomorrow = document.getElementById('tab-tomorrow');
+  for (const [key, id] of Object.entries(TABS)) {
+    const btn = document.getElementById(id);
+    if (!btn) continue;
+    const on = key === tab;
+    btn.style.borderBottomColor = on ? 'var(--turquoise)' : 'transparent';
+    btn.style.color             = on ? 'var(--turquoise)' : 'var(--ink-mute)';
+    btn.style.fontWeight        = on ? '700' : '600';
+  }
 
-  btnToday.style.borderBottomColor = isToday ? 'var(--turquoise)' : 'transparent';
-  btnToday.style.color             = isToday ? 'var(--turquoise)' : 'var(--ink-mute)';
-  btnToday.style.fontWeight        = isToday ? '700' : '600';
+  const isWeek = tab === 'week';
+  document.body.classList.toggle('magasin-week', isWeek);
+  document.getElementById('week-nav').style.display   = isWeek ? 'flex' : 'none';
+  document.getElementById('week-grid').style.display  = isWeek ? 'grid' : 'none';
+  document.getElementById('stops-list').style.display = isWeek ? 'none' : 'flex';
 
-  btnTomorrow.style.borderBottomColor = !isToday ? 'var(--turquoise)' : 'transparent';
-  btnTomorrow.style.color             = !isToday ? 'var(--turquoise)' : 'var(--ink-mute)';
-  btnTomorrow.style.fontWeight        = !isToday ? '700' : '600';
+  loadStops();
+}
 
+function weekShift(dir) {
+  if (dir === 0) weekAnchor = startOfWeek(new Date());
+  else {
+    const d = new Date(weekAnchor);
+    d.setDate(d.getDate() + dir * 7);
+    weekAnchor = d;
+  }
   loadStops();
 }
 
 function getTabDate() {
   const d = new Date();
   if (activeTab === 'tomorrow') d.setDate(d.getDate() + 1);
-  return d.toISOString().split('T')[0];
+  return fmtDate(d);
+}
+
+function getWeekRange() {
+  const end = new Date(weekAnchor);
+  end.setDate(end.getDate() + 6);
+  return { from: fmtDate(weekAnchor), to: fmtDate(end) };
+}
+
+function startOfWeek(d) {
+  const r = new Date(d);
+  const day = r.getDay();
+  r.setDate(r.getDate() + (day === 0 ? -6 : 1 - day));
+  r.setHours(0, 0, 0, 0);
+  return r;
+}
+
+function fmtDate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
 async function logout() {
@@ -64,17 +101,93 @@ function setTodayDate() {
 
 // ── Load stops ────────────────────────────────────────────────
 async function loadStops() {
+  const isWeek = activeTab === 'week';
   try {
-    const date = getTabDate();
-    const res = await fetch(`/api/stops?date=${date}`);
+    let url;
+    if (isWeek) {
+      const { from, to } = getWeekRange();
+      url = `/api/stops?from=${from}&to=${to}`;
+    } else {
+      url = `/api/stops?date=${getTabDate()}`;
+    }
+
+    const res = await fetch(url);
     if (res.status === 401) { window.location.href = '/'; return; }
     stops = await res.json();
-    renderList();
+
+    if (isWeek) renderWeek();
+    else        renderList();
     updateCounts();
   } catch {
-    document.getElementById('stops-list').innerHTML =
+    const target = isWeek ? 'week-grid' : 'stops-list';
+    document.getElementById(target).innerHTML =
       '<div style="text-align:center;padding:40px;color:var(--danger)">Erreur de chargement. Actualisez la page.</div>';
   }
+}
+
+// ── Vue semaine ───────────────────────────────────────────────
+function renderWeek() {
+  const grid  = document.getElementById('week-grid');
+  const today = fmtDate(new Date());
+
+  const label = document.getElementById('week-label');
+  const end   = new Date(weekAnchor);
+  end.setDate(end.getDate() + 6);
+  label.textContent = `Semaine du ${weekAnchor.getDate()} ${MONTHS_FR[weekAnchor.getMonth()]} au ${end.getDate()} ${MONTHS_FR[end.getMonth()]} ${end.getFullYear()}`;
+
+  // Regrouper par date
+  const byDate = {};
+  for (const s of stops) {
+    if (!s.date_tournee) continue;
+    (byDate[s.date_tournee] = byDate[s.date_tournee] || []).push(s);
+  }
+
+  let html = '';
+  for (let i = 0; i < 7; i++) {
+    const d   = new Date(weekAnchor);
+    d.setDate(d.getDate() + i);
+    const key = fmtDate(d);
+    const dayStops = byDate[key] || [];
+    const prets    = dayStops.filter(s => s.magasin_valide === true).length;
+
+    const progressCls = dayStops.length && prets === dayStops.length ? 'done' : '';
+
+    html += `
+      <div class="week-col ${key === today ? 'today' : ''}">
+        <div class="week-col-head">
+          <div>
+            <div class="wc-day">${DAYS_FR[i]}</div>
+            <div class="wc-date">${d.getDate()} ${MONTHS_FR[d.getMonth()]}</div>
+          </div>
+          <span class="wc-progress ${progressCls}">${prets}/${dayStops.length}</span>
+        </div>
+        <div class="week-col-body">
+          ${dayStops.length ? dayStops.map(weekCard).join('') : '<div class="week-empty">Rien à préparer</div>'}
+        </div>
+      </div>`;
+  }
+
+  grid.innerHTML = html;
+}
+
+function weekCard(s) {
+  const ms = getMagasinStatus(s);
+
+  const tags = [];
+  if (s.type_produit)  tags.push(`<span class="wk-tag">${esc(s.type_produit)}</span>`);
+  if (s.nombre_colis)  tags.push(`<span class="wk-tag colis">${s.nombre_colis} colis</span>`);
+  if (s.emplacement)   tags.push(`<span class="wk-tag">${esc(s.emplacement)}</span>`);
+  if ((s.stop_photos || []).length) tags.push(`<span class="wk-tag">📷 ${s.stop_photos.length}</span>`);
+  if (ms === 'en-cours') tags.push('<span class="wk-tag draft">Brouillon</span>');
+  if (ms === 'a-preparer') tags.push(`<span class="wk-tag">${BADGE_LABEL['a-preparer']}</span>`);
+
+  return `
+    <div class="week-card ${ms}" onclick="openPrepSheet('${s.id}')" title="Ouvrir la fiche de préparation">
+      ${s.numero_affaire ? `<div class="wk-affaire">N° ${esc(s.numero_affaire)}</div>` : ''}
+      <div class="wk-societe">${esc(s.societe)}</div>
+      <div class="wk-meta">${esc(s.tournee || s.societe_livraison || '')}</div>
+      ${tags.length ? `<div class="wk-tags">${tags.join('')}</div>` : ''}
+    </div>`;
 }
 
 // ── Counts ────────────────────────────────────────────────────
@@ -170,6 +283,7 @@ function openPrepSheet(id) {
   const meta = [
     stop.numero_affaire ? `N° ${stop.numero_affaire}` : null,
     stop.tournee        ? stop.tournee                 : null,
+    stop.date_tournee   ? `Livraison le ${new Date(stop.date_tournee + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}` : null,
   ].filter(Boolean).join(' · ');
   document.getElementById('prep-meta').textContent = meta;
 
@@ -179,7 +293,7 @@ function openPrepSheet(id) {
 
   document.getElementById('prep-photo-input').value = '';
   document.getElementById('prep-error').style.display = 'none';
-  document.getElementById('prep-submit-btn').disabled = false;
+  resetPrepButtons();
 
   renderPhotosGrid();
 
@@ -252,36 +366,57 @@ function handlePhotoSelected(input) {
   reader.readAsDataURL(file);
 }
 
-// ── Soumettre la préparation ──────────────────────────────────
-async function submitPrep() {
+// ── Enregistrer sans valider (brouillon) ──────────────────────
+// Le magasinier peut saisir ce qu'il a, fermer, et revenir plus tard.
+function saveDraft() { persistPrep(false); }
+function submitPrep() { persistPrep(true); }
+
+async function persistPrep(validate) {
   const colisVal    = document.getElementById('prep-colis').value.trim();
   const emplacement = document.getElementById('prep-emplacement').value.trim();
   const commentaire = document.getElementById('prep-commentaire').value.trim();
   const errEl       = document.getElementById('prep-error');
-  const btn         = document.getElementById('prep-submit-btn');
+  const btn         = document.getElementById(validate ? 'prep-submit-btn' : 'prep-draft-btn');
+  const otherBtn    = document.getElementById(validate ? 'prep-draft-btn' : 'prep-submit-btn');
+  const stopId      = activePrepId;
 
   errEl.style.display = 'none';
 
-  if (!colisVal || parseInt(colisVal, 10) < 1) {
-    errEl.textContent    = 'Le nombre de colis est obligatoire (minimum 1).';
+  const colisNum = colisVal ? parseInt(colisVal, 10) : null;
+
+  if (validate && (!colisNum || colisNum < 1)) {
+    errEl.textContent    = 'Le nombre de colis est obligatoire pour valider (minimum 1). Utilisez « Enregistrer » pour reprendre plus tard.';
+    errEl.style.display  = 'block';
+    return;
+  }
+  if (colisVal && (Number.isNaN(colisNum) || colisNum < 1)) {
+    errEl.textContent    = 'Le nombre de colis doit être un entier supérieur à 0.';
+    errEl.style.display  = 'block';
+    return;
+  }
+  if (!validate && !colisVal && !emplacement && !commentaire && !pendingPhotos.length) {
+    errEl.textContent    = 'Rien à enregistrer : renseignez au moins un champ ou ajoutez une photo.';
     errEl.style.display  = 'block';
     return;
   }
 
-  btn.disabled    = true;
-  btn.textContent = 'Validation en cours…';
+  btn.disabled      = true;
+  otherBtn.disabled = true;
+  btn.textContent   = validate ? 'Validation en cours…' : 'Enregistrement…';
 
   try {
-    // 1. PATCH principal
-    const patchRes = await fetch(`/api/stops/${activePrepId}`, {
+    // 1. PATCH principal — `magasin_valide` seulement en validation
+    const payload = {
+      nombre_colis:        colisNum,
+      emplacement:         emplacement || null,
+      commentaire_magasin: commentaire || null,
+    };
+    if (validate) payload.magasin_valide = true;
+
+    const patchRes = await fetch(`/api/stops/${stopId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        nombre_colis:        parseInt(colisVal, 10),
-        emplacement:         emplacement || null,
-        commentaire_magasin: commentaire || null,
-        magasin_valide:      true,
-      }),
+      body: JSON.stringify(payload),
     });
 
     if (!patchRes.ok) {
@@ -292,7 +427,7 @@ async function submitPrep() {
     }
 
     const updated = await patchRes.json();
-    const idx = stops.findIndex(s => s.id === activePrepId);
+    const idx = stops.findIndex(s => s.id === stopId);
     if (idx !== -1) stops[idx] = { ...updated, stop_photos: stops[idx].stop_photos || [] };
 
     // 2. Upload photos en attente
@@ -303,7 +438,7 @@ async function submitPrep() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            stop_id:      activePrepId,
+            stop_id:      stopId,
             image:        photo.base64,
             content_type: photo.type,
           }),
@@ -323,16 +458,23 @@ async function submitPrep() {
     }
 
     if (photoErrors > 0) {
-      errEl.textContent   = `⚠ Colis enregistrés mais ${photoErrors} photo(s) non sauvegardée(s).`;
+      errEl.textContent   = `⚠ Enregistré, mais ${photoErrors} photo(s) non sauvegardée(s). Rouvrez la fiche pour réessayer.`;
       errEl.style.display = 'block';
+      pendingPhotos = [];
+      renderPhotosGrid();
+      if (activeTab === 'week') renderWeek(); else renderList();
+      updateCounts();
+      return;
     }
 
     closePrepSheet();
-    renderList();
+    if (activeTab === 'week') renderWeek(); else renderList();
     updateCounts();
 
     const feedback = document.createElement('div');
-    feedback.textContent = `✓ ${updated.societe || 'Stop'} — colis prêts !`;
+    feedback.textContent = validate
+      ? `✓ ${updated.societe || 'Stop'} — colis prêts !`
+      : `✓ ${updated.societe || 'Stop'} — préparation enregistrée`;
     Object.assign(feedback.style, {
       position: 'fixed', bottom: '32px', left: '50%',
       transform: 'translateX(-50%)',
@@ -350,9 +492,17 @@ async function submitPrep() {
     errEl.textContent   = 'Erreur réseau. Vérifiez votre connexion.';
     errEl.style.display = 'block';
   } finally {
-    btn.disabled  = false;
-    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg> Valider — colis prêts';
+    resetPrepButtons();
   }
+}
+
+function resetPrepButtons() {
+  const submit = document.getElementById('prep-submit-btn');
+  const draft  = document.getElementById('prep-draft-btn');
+  submit.disabled  = false;
+  draft.disabled   = false;
+  submit.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg> Valider — colis prêts';
+  draft.textContent = 'Enregistrer';
 }
 
 // ── Utils ─────────────────────────────────────────────────────

@@ -6,6 +6,12 @@
 
   let planningMode = 'semaine'; // 'semaine' | 'mois' | 'trimestre'
   let planningAnchor = null;    // Date objet représentant la semaine/mois/trimestre en cours
+  let tvMode = false;           // mode écran (diffusion sur écran salariés)
+  let tvTimer = null;           // rafraîchissement auto
+  let clockTimer = null;
+  let lastTotals = { total: 0, livre: 0, en_cours: 0, a_livrer: 0 };
+
+  const TV_REFRESH_MS = 60000;
 
   /* ── Point d'entrée ───────────────────────────────────────── */
   window.initPlanning = function () {
@@ -19,6 +25,7 @@
     if (!container) return;
 
     container.innerHTML = `
+      <div class="planning-tv-bar" id="planning-tv-bar"></div>
       <div class="planning-toolbar">
         <div class="planning-mode-toggle">
           <button class="chip ${planningMode==='semaine'?'active':''}"   onclick="setPlanningMode('semaine')">Semaine</button>
@@ -29,6 +36,9 @@
           <button class="btn sm" onclick="planningPrev()">&#8249;</button>
           <button class="btn sm" onclick="planningToday()" style="min-width:90px">Aujourd'hui</button>
           <button class="btn sm" onclick="planningNext()">&#8250;</button>
+          <button class="btn sm" id="btn-planning-tv" onclick="togglePlanningTv()" style="min-width:120px">
+            ${tvMode ? '✕ Quitter l\'écran' : '🖥 Mode écran'}
+          </button>
         </div>
       </div>
       <div id="planning-grid-wrapper">
@@ -37,6 +47,62 @@
     `;
 
     fetchAndRender();
+  }
+
+  /* ── Mode écran ───────────────────────────────────────────── */
+  window.togglePlanningTv = function () {
+    tvMode = !tvMode;
+    document.body.classList.toggle('planning-tv', tvMode);
+
+    if (tvMode) {
+      // Le mode écran n'a de sens qu'en vue semaine ou mois
+      if (planningMode === 'trimestre') planningMode = 'semaine';
+      if (planningMode === 'semaine')   planningAnchor = startOfWeek(new Date());
+      document.documentElement.requestFullscreen?.().catch(() => { /* refus navigateur : non-bloquant */ });
+      tvTimer   = setInterval(fetchAndRender, TV_REFRESH_MS);
+      clockTimer = setInterval(renderTvBar, 1000);
+    } else {
+      clearInterval(tvTimer);   tvTimer = null;
+      clearInterval(clockTimer); clockTimer = null;
+      if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+    }
+
+    renderPlanningUI();
+  };
+
+  // Sortie du plein écran via Échap → repasser en mode normal
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement && tvMode) window.togglePlanningTv();
+  });
+
+  function renderTvBar() {
+    const bar = document.getElementById('planning-tv-bar');
+    if (!bar || !tvMode) return;
+    const now = new Date();
+    const pct = lastTotals.total ? Math.round(lastTotals.livre / lastTotals.total * 100) : 0;
+
+    bar.innerHTML = `
+      <div class="ptb-item">
+        <span class="ptb-label">Stops sur la période</span>
+        <span class="ptb-value">${lastTotals.total}</span>
+      </div>
+      <div class="ptb-item">
+        <span class="ptb-label">Livrés</span>
+        <span class="ptb-value" style="color:var(--status-done-dot)">${lastTotals.livre} · ${pct}%</span>
+      </div>
+      <div class="ptb-item">
+        <span class="ptb-label">En cours</span>
+        <span class="ptb-value" style="color:var(--status-now-dot)">${lastTotals.en_cours}</span>
+      </div>
+      <div class="ptb-item">
+        <span class="ptb-label">À livrer</span>
+        <span class="ptb-value">${lastTotals.a_livrer}</span>
+      </div>
+      <div class="ptb-item ptb-spacer" style="align-items:flex-end">
+        <span class="ptb-clock">${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}</span>
+        <span class="ptb-refresh">Actualisé toutes les minutes</span>
+      </div>
+    `;
   }
 
   /* ── Navigation ───────────────────────────────────────────── */
@@ -110,6 +176,15 @@
     const wrapper = document.getElementById('planning-grid-wrapper');
     if (!wrapper) return;
 
+    lastTotals = { total: 0, livre: 0, en_cours: 0, a_livrer: 0 };
+    for (const info of Object.values(data)) {
+      lastTotals.total    += info.total    || 0;
+      lastTotals.livre    += info.livre    || 0;
+      lastTotals.en_cours += info.en_cours || 0;
+      lastTotals.a_livrer += info.a_livrer || 0;
+    }
+    renderTvBar();
+
     if (planningMode === 'semaine') {
       wrapper.innerHTML = renderWeek(data, planningAnchor);
     } else if (planningMode === 'mois') {
@@ -148,7 +223,7 @@
           </div>
           <div class="pdc-count">${info.total > 0 ? info.total : '<span class="pdc-empty">—</span>'}</div>
           ${info.total > 0 ? `<div class="pdc-label">stop${info.total > 1 ? 's' : ''}</div>` : ''}
-          ${info.total > 0 && info.clients && info.clients.length > 0 ? renderClients(info.clients) : ''}
+          ${info.total > 0 ? renderEntries(info) : ''}
           ${info.total > 0 ? renderBar(info) : ''}
         </div>`;
     }
@@ -185,8 +260,12 @@
       const dow = new Date(year, month, day).getDay();
       const isWeekend = dow === 0 || dow === 6;
 
+      const tip = (info.entries || [])
+        .map(e => [e.affaire ? `N° ${e.affaire}` : null, e.client].filter(Boolean).join(' — '))
+        .join('\n');
+
       html += `
-        <div class="pmg-cell ${isToday ? 'today' : ''} ${isWeekend ? 'weekend' : ''}">
+        <div class="pmg-cell ${isToday ? 'today' : ''} ${isWeekend ? 'weekend' : ''}" title="${esc(tip)}">
           <div class="pmg-day">${day}</div>
           ${info.total > 0 ? `<div class="pmg-count">${info.total}</div>` : ''}
         </div>`;
@@ -240,16 +319,35 @@
     return html;
   }
 
-  /* ── Liste clients ────────────────────────────────────────── */
-  function renderClients(clients) {
-    const MAX = 4;
-    const shown = clients.slice(0, MAX);
-    const rest  = clients.length - MAX;
-    let html = '<div class="pdc-clients">';
-    for (const c of shown) html += `<div class="pdc-client-tag">${c}</div>`;
-    if (rest > 0) html += `<div class="pdc-client-more">+${rest}</div>`;
+  /* ── Liste des livraisons du jour : référence affaire + client ── */
+  function renderEntries(info) {
+    // `entries` (API V2) porte l'affaire ET le client ; `clients` = repli
+    const entries = info.entries && info.entries.length
+      ? info.entries
+      : (info.clients || []).map(c => ({ affaire: null, client: c }));
+
+    if (!entries.length) return '';
+
+    const MAX   = tvMode ? entries.length : 4;
+    const shown = entries.slice(0, MAX);
+    const rest  = entries.length - shown.length;
+
+    let html = '<div class="pdc-entries">';
+    for (const e of shown) {
+      const st = (e.statut || 'A_LIVRER').toLowerCase();
+      html += `<div class="pdc-entry st-${esc(st)}">
+        ${e.affaire ? `<span class="pdc-affaire">N° ${esc(e.affaire)}</span>` : ''}
+        ${e.client  ? `<span class="pdc-client">${esc(e.client)}</span>` : ''}
+      </div>`;
+    }
+    if (rest > 0) html += `<div class="pdc-entry-more">+${rest} autre${rest > 1 ? 's' : ''}</div>`;
     html += '</div>';
     return html;
+  }
+
+  function esc(str) {
+    if (str === null || str === undefined) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
   /* ── Barre statut ─────────────────────────────────────────── */

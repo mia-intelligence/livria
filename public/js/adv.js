@@ -802,6 +802,20 @@ function renderAdvMap() {
   }
 }
 
+// ── Fermeture générique des modals ────────────────────────────
+// Croix (dans le HTML) + clic sur le fond + touche Échap : une modale
+// ouverte par erreur ne doit jamais rester bloquée à l'écran.
+document.addEventListener('click', (e) => {
+  if (e.target.classList?.contains('modal-overlay')) {
+    e.target.classList.add('hidden');
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  document.querySelectorAll('.modal-overlay:not(.hidden)').forEach(el => el.classList.add('hidden'));
+});
+
 // ── Logout ────────────────────────────────────────────────────
 async function logout() {
   await fetch('/api/auth/logout', { method: 'POST' });

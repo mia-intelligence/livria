@@ -285,6 +285,19 @@ html, body {
 .modal .modal-sub { font-size: 13px; color: var(--ink-soft); margin-bottom: 20px; }
 .modal .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 24px; }
 
+/* Bouton de fermeture (croix) */
+.modal { position: relative; max-height: calc(100vh - 32px); overflow-y: auto; }
+.modal-close {
+  position: absolute; top: 14px; right: 14px;
+  width: 34px; height: 34px; border-radius: 50%;
+  border: 1px solid var(--line); background: var(--canvas);
+  color: var(--ink-soft); font-size: 20px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; padding: 0;
+}
+.modal-close:hover { background: var(--danger-soft); color: #A14444; border-color: #E3B7B7; }
+.modal h2 { padding-right: 44px; }
+
 /* Form fields */
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
 .field label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-mute); }
@@ -395,6 +408,73 @@ html, body {
 .pqg-day-num { font-size: 9px; color: var(--ink-soft); }
 .pqg-count { font-size: 10px; font-weight: 800; color: var(--turquoise-dark); line-height: 1; }
 
+/* Entrées d'un jour : référence affaire + client */
+.pdc-entries { width: 100%; margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+.pdc-entry {
+  background: var(--canvas); border-radius: 6px; padding: 3px 7px;
+  border-left: 3px solid var(--line); min-width: 0;
+}
+.pdc-entry.st-livre    { border-left-color: var(--status-done-dot); }
+.pdc-entry.st-en_cours { border-left-color: var(--status-now-dot); }
+.pdc-entry.st-a_livrer { border-left-color: var(--status-todo-dot); }
+.pdc-affaire {
+  display: block; font-size: 10.5px; font-weight: 800; color: var(--turquoise-dark);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pdc-client {
+  display: block; font-size: 10px; font-weight: 600; color: var(--ink-soft);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pdc-entry-more { font-size: 10px; color: var(--ink-mute); padding: 1px 4px; }
+
+/* ── Planning : mode écran (affichage salarié) ──────────────────
+   Activé par la classe .planning-tv sur <body> + Fullscreen API. */
+.planning-tv .sidebar,
+.planning-tv .topbar,
+.planning-tv .page-head { display: none !important; }
+.planning-tv .app-layout { display: block; }
+.planning-tv .main-area  { height: 100vh; }
+.planning-tv .page-content { padding: 0; height: 100vh; overflow: hidden; }
+.planning-tv .stops-section:not(#section-planning):not(#tab-planning) { display: none !important; }
+.planning-tv .card {
+  border: 0; border-radius: 0; height: 100vh; margin: 0;
+  padding: 20px 26px; display: flex; flex-direction: column;
+}
+.planning-tv #planning-container { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.planning-tv #planning-grid-wrapper { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+.planning-tv .planning-week-grid { flex: 1; gap: 12px; align-content: stretch; }
+.planning-tv .planning-day-cell { min-height: 0; padding: 16px 14px; }
+.planning-tv .pdc-dayname { font-size: 16px; }
+.planning-tv .pdc-date    { font-size: 15px; }
+.planning-tv .pdc-count   { font-size: 52px; }
+.planning-tv .pdc-label   { font-size: 15px; }
+.planning-tv .pdc-entries { overflow-y: auto; gap: 6px; }
+.planning-tv .pdc-affaire { font-size: 15px; }
+.planning-tv .pdc-client  { font-size: 14px; }
+.planning-tv .pdc-bar     { height: 9px; }
+.planning-tv .planning-period-label { font-size: 22px; margin-bottom: 14px; }
+.planning-tv .planning-month-grid { flex: 1; }
+.planning-tv .pmg-cell  { min-height: 0; }
+.planning-tv .pmg-day   { font-size: 18px; }
+.planning-tv .pmg-count { font-size: 30px; }
+.planning-tv .pmg-header { font-size: 16px; }
+.planning-tv .chip, .planning-tv .btn.sm { height: 42px; font-size: 15px; padding: 0 18px; }
+
+/* Bandeau de synthèse affiché uniquement en mode écran */
+.planning-tv-bar { display: none; }
+.planning-tv .planning-tv-bar {
+  display: flex; align-items: center; gap: 26px; flex-wrap: wrap;
+  background: var(--side-bg); color: #fff;
+  border-radius: 14px; padding: 14px 22px; margin-bottom: 14px;
+}
+.ptb-item { display: flex; flex-direction: column; gap: 2px; }
+.ptb-label { font-size: 12px; text-transform: uppercase; letter-spacing: .1em; opacity: .7; }
+.ptb-value { font-size: 28px; font-weight: 800; line-height: 1; }
+.ptb-spacer { margin-left: auto; }
+.ptb-clock { font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.ptb-refresh { font-size: 12px; opacity: .7; }
+
 /* ============================================================
    LOGIN PAGE
    ============================================================ */
@@ -497,6 +577,18 @@ html, body {
   padding: 13px 22px; border-radius: 99px;
   font: 600 13.5px 'Inter', sans-serif; border: 0; cursor: pointer;
   box-shadow: 0 8px 24px rgba(15,42,46,.35); z-index: 20;
+}
+
+/* Dans une .fab-zone, les boutons sont posés dans le flux : sans ce
+   reset ils restent en position:fixed au même endroit et se superposent. */
+.fab-zone .fab {
+  position: static; transform: none; left: auto; bottom: auto;
+  flex: 1 1 0; min-width: 0; justify-content: center;
+  white-space: nowrap;
+}
+.fab-zone { flex-wrap: wrap; }
+@media (max-width: 380px) {
+  .fab-zone .fab { flex: 1 1 100%; }
 }
 
 /* Stop modal (bottom sheet on mobile) */

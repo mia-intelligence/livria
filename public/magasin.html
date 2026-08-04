@@ -165,6 +165,73 @@
       border-radius: 10px; padding: 10px 14px;
       font-size: 13px; margin-bottom: 14px; display: none;
     }
+    .prep-info {
+      background: var(--turquoise-soft); color: var(--turquoise-dark);
+      border-radius: 10px; padding: 10px 14px;
+      font-size: 12.5px; margin-bottom: 14px;
+    }
+
+    /* ── Vue semaine (optimisation des préparations) ───────────── */
+    /* En vue semaine on sort du gabarit mobile 430px pour afficher
+       les 7 colonnes de jours côte à côte. */
+    body.magasin-week .livreur-layout { max-width: 100%; }
+
+    .week-nav {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 10px; padding: 12px 16px 0;
+    }
+    .week-nav .wn-label { font-size: 13.5px; font-weight: 700; }
+    .week-nav .wn-btns { display: flex; gap: 6px; }
+    .week-nav button {
+      height: 32px; min-width: 32px; padding: 0 12px;
+      border-radius: 99px; border: 1px solid var(--line);
+      background: var(--bg); font: 600 12.5px 'Inter', sans-serif;
+      color: var(--ink-soft); cursor: pointer;
+    }
+
+    .week-grid {
+      flex: 1; overflow: auto; padding: 12px 16px 40px;
+      display: grid; grid-template-columns: repeat(7, minmax(190px, 1fr));
+      gap: 12px; align-items: start;
+    }
+    .week-col {
+      background: var(--canvas); border: 1px solid var(--line);
+      border-radius: 14px; padding: 10px; min-width: 0;
+    }
+    .week-col.today { border-color: var(--turquoise); background: var(--turquoise-soft); }
+    .week-col-head {
+      display: flex; align-items: baseline; justify-content: space-between;
+      gap: 6px; padding: 2px 4px 10px;
+    }
+    .wc-day { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+    .wc-date { font-size: 11px; color: var(--ink-mute); }
+    .wc-progress {
+      font-size: 11px; font-weight: 700; color: var(--ink-soft);
+      background: var(--bg); border-radius: 99px; padding: 1px 8px;
+    }
+    .wc-progress.done { background: var(--status-done-bg); color: var(--status-done-fg); }
+    .week-col-body { display: flex; flex-direction: column; gap: 8px; }
+    .week-empty { font-size: 11.5px; color: var(--ink-mute); text-align: center; padding: 14px 0; }
+
+    .week-card {
+      background: var(--bg); border: 1px solid var(--line);
+      border-left: 3px solid var(--status-todo-dot);
+      border-radius: 10px; padding: 9px 10px; cursor: pointer;
+    }
+    .week-card:hover { box-shadow: 0 3px 12px rgba(0,0,0,.08); }
+    .week-card.pret     { border-left-color: var(--status-done-dot); }
+    .week-card.en-cours { border-left-color: var(--status-now-dot); }
+    .wk-affaire { font-size: 11px; font-weight: 800; color: var(--turquoise-dark); }
+    .wk-societe { font-size: 12.5px; font-weight: 700; margin-top: 1px;
+                  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .wk-meta    { font-size: 11px; color: var(--ink-mute); margin-top: 3px; }
+    .wk-tags    { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+    .wk-tag {
+      font-size: 10.5px; font-weight: 600; border-radius: 99px;
+      padding: 1px 8px; background: var(--canvas); color: var(--ink-soft);
+    }
+    .wk-tag.colis { background: var(--turquoise-soft); color: var(--turquoise-dark); }
+    .wk-tag.draft { background: var(--warn-soft); color: #8A5A12; }
   </style>
 </head>
 <body>
@@ -196,6 +263,20 @@
       style="flex:1;padding:12px 0;border:none;border-bottom:2px solid transparent;background:none;font:600 13px 'Inter',sans-serif;color:var(--ink-mute);cursor:pointer">
       Demain
     </button>
+    <button id="tab-week" onclick="switchTab('week')"
+      style="flex:1;padding:12px 0;border:none;border-bottom:2px solid transparent;background:none;font:600 13px 'Inter',sans-serif;color:var(--ink-mute);cursor:pointer">
+      Semaine
+    </button>
+  </div>
+
+  <!-- NAVIGATION SEMAINE (vue semaine uniquement) -->
+  <div class="week-nav" id="week-nav" style="display:none">
+    <div class="wn-label" id="week-label">—</div>
+    <div class="wn-btns">
+      <button onclick="weekShift(-1)">&#8249;</button>
+      <button onclick="weekShift(0)">Cette semaine</button>
+      <button onclick="weekShift(1)">&#8250;</button>
+    </div>
   </div>
 
   <!-- COMPTEURS -->
@@ -214,12 +295,15 @@
     </div>
   </div>
 
-  <!-- STOPS LIST -->
+  <!-- STOPS LIST (jour) -->
   <div class="stops-list" id="stops-list">
     <div style="text-align:center;padding:40px 20px;color:var(--ink-mute);">
       Chargement…
     </div>
   </div>
+
+  <!-- GRILLE SEMAINE -->
+  <div class="week-grid" id="week-grid" style="display:none"></div>
 
 </div>
 
@@ -236,9 +320,13 @@
   </div>
 
   <div class="prep-error" id="prep-error"></div>
+  <div class="prep-info">
+    Vous pouvez <b>enregistrer</b> une préparation incomplète et y revenir plus tard.
+    « Valider » signale au livreur que les colis sont prêts.
+  </div>
 
   <div class="field" style="margin-bottom:16px">
-    <label>Nombre de colis *</label>
+    <label>Nombre de colis <span style="font-weight:400;text-transform:none;letter-spacing:0">— requis pour valider</span></label>
     <input type="number" id="prep-colis" min="1" placeholder="Ex : 3">
   </div>
 
@@ -267,18 +355,22 @@
     <textarea id="prep-commentaire" placeholder="Ex : Fragile, manipuler avec soin — sonnette cassée, appeler en arrivant…"></textarea>
   </div>
 
-  <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:10px;padding-top:8px">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding-top:8px">
     <button onclick="closePrepSheet()"
       style="height:50px;border-radius:14px;border:1px solid var(--line);background:var(--canvas);font:600 14px 'Inter',sans-serif;color:var(--ink);cursor:pointer;">
       Annuler
     </button>
-    <button class="btn-valider" id="prep-submit-btn" onclick="submitPrep()">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-        <path d="M20 6L9 17l-5-5" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      Valider — colis prêts
+    <button id="prep-draft-btn" onclick="saveDraft()"
+      style="height:50px;border-radius:14px;border:1px solid var(--turquoise);background:var(--turquoise-soft);font:700 14px 'Inter',sans-serif;color:var(--turquoise-dark);cursor:pointer;">
+      Enregistrer
     </button>
   </div>
+  <button class="btn-valider" id="prep-submit-btn" onclick="submitPrep()" style="margin-top:10px">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+      <path d="M20 6L9 17l-5-5" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    Valider — colis prêts
+  </button>
 </div>
 
 <script src="/js/magasin.js"></script>

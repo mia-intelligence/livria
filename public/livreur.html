@@ -18,13 +18,71 @@
       display: flex; justify-content: center; gap: 12px;
       padding: 12px 16px 20px; flex-shrink: 0;
       background: var(--canvas);
+      border-top: 1px solid var(--line);
     }
 
+    /* Onglets Liste / Itinéraire */
+    .lv-tabs {
+      background: var(--bg); border-bottom: 1px solid var(--line);
+      display: flex; padding: 0 16px; flex-shrink: 0;
+    }
+    .lv-tab {
+      flex: 1; padding: 12px 0; border: none;
+      border-bottom: 2px solid transparent; background: none;
+      font: 600 13px 'Inter', sans-serif; color: var(--ink-mute); cursor: pointer;
+    }
+    .lv-tab.active { border-bottom-color: var(--turquoise); color: var(--turquoise); font-weight: 700; }
+
+    /* Feuille de route */
+    .route-panel { flex: 1; overflow-y: auto; padding: 12px 16px 16px; display: none; }
+    .route-panel.active { display: block; }
+
+    .route-summary {
+      background: var(--side-bg); color: #fff; border-radius: 14px;
+      padding: 14px 16px; display: flex; gap: 22px; flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+    .rs-item { display: flex; flex-direction: column; gap: 2px; }
+    .rs-label { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; opacity: .7; }
+    .rs-value { font-size: 18px; font-weight: 800; line-height: 1; }
+
+    .route-leg {
+      background: var(--bg); border: 1px solid var(--line);
+      border-radius: 14px; margin-bottom: 10px; overflow: hidden;
+    }
+    .route-leg-head {
+      padding: 12px 14px; display: flex; align-items: center; gap: 12px;
+      cursor: pointer; background: var(--bg);
+    }
+    .rl-num {
+      width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+      background: var(--turquoise); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700;
+    }
+    .rl-body { flex: 1; min-width: 0; }
+    .rl-name { font-size: 13.5px; font-weight: 700; }
+    .rl-meta { font-size: 11.5px; color: var(--ink-mute); margin-top: 2px; }
+    .rl-chev { color: var(--ink-mute); font-size: 15px; flex-shrink: 0; }
+
+    .route-steps { display: none; border-top: 1px solid var(--line); padding: 4px 0; }
+    .route-leg.open .route-steps { display: block; }
+    .route-leg.open .rl-chev { transform: rotate(90deg); }
+    .route-step {
+      display: flex; gap: 12px; align-items: flex-start;
+      padding: 9px 14px; font-size: 13px; line-height: 1.45;
+    }
+    .route-step + .route-step { border-top: 1px solid var(--line-soft); }
+    .rs-icon { font-size: 15px; width: 20px; flex-shrink: 0; text-align: center; }
+    .rs-dist { font-size: 11px; color: var(--ink-mute); margin-top: 2px; }
+
     @media print {
-      .map-container, .fab-zone,
+      .map-container, .fab-zone, .lv-tabs,
       .stop-sheet-overlay, .stop-sheet { display: none !important; }
       .livreur-layout { max-width: 100%; height: auto; overflow: visible; }
       .stops-list { overflow: visible; }
+      .route-panel { display: block !important; overflow: visible; }
+      .route-steps { display: block !important; }
       .stop-card { cursor: default; }
       body { background: #fff; }
     }
@@ -70,10 +128,23 @@
     <div id="livreur-map"></div>
   </div>
 
+  <!-- ONGLETS -->
+  <div class="lv-tabs">
+    <button class="lv-tab active" id="lv-tab-liste" onclick="switchLivreurTab('liste')">Liste des stops</button>
+    <button class="lv-tab" id="lv-tab-route" onclick="switchLivreurTab('route')">Itinéraire</button>
+  </div>
+
   <!-- STOPS LIST -->
   <div class="stops-list" id="stops-list">
     <div style="text-align:center;padding:40px 20px;color:var(--ink-mute);">
       Chargement de la tournée…
+    </div>
+  </div>
+
+  <!-- FEUILLE DE ROUTE -->
+  <div class="route-panel" id="route-panel">
+    <div style="text-align:center;padding:40px 20px;color:var(--ink-mute);">
+      Chargement de l'itinéraire…
     </div>
   </div>
 
@@ -125,6 +196,18 @@
       <input type="checkbox" id="cb-colis-confirme" style="width:18px;height:18px;margin-top:1px;flex-shrink:0;accent-color:var(--turquoise)" onchange="onColisCheckChange()">
       <span id="cb-colis-label">J'ai bien pris tous les colis</span>
     </label>
+  </div>
+
+  <!-- Phrase à trous : nombre de colis effectivement livrés -->
+  <div id="sheet-colis-livres" style="display:none;margin:14px 0;background:var(--canvas);border-radius:12px;padding:14px;">
+    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-size:15px;font-weight:600;color:var(--ink)">
+      <span>J'ai livré</span>
+      <input type="number" id="in-colis-livres" min="0" inputmode="numeric" placeholder="—"
+        style="width:86px;height:46px;border-radius:12px;border:1px solid var(--line);text-align:center;font:800 18px 'Inter',sans-serif;color:var(--turquoise-dark);background:var(--bg);outline:none"
+        oninput="onColisLivresInput()">
+      <span>colis<span id="colis-livres-attendu"></span>.</span>
+    </div>
+    <div id="colis-livres-ecart" style="display:none;margin-top:8px;font-size:12.5px;font-weight:600;color:#8A5A12;background:var(--warn-soft);border-radius:8px;padding:6px 10px"></div>
   </div>
 
   <div class="status-actions" id="status-actions"></div>

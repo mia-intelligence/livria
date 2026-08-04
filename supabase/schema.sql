@@ -77,6 +77,12 @@ CREATE TABLE IF NOT EXISTS stops (
 -- ALTER TABLE stops ADD COLUMN IF NOT EXISTS type_produit TEXT CHECK (type_produit IS NULL OR type_produit = ANY (ARRAY['PVC','ALU','MIXTE']));
 -- ALTER TABLE stops ADD COLUMN IF NOT EXISTS groupe_livraison TEXT;
 
+-- ── Migration V4 (référence client, colis livrés) ──────────────
+-- Exécuter dans l'éditeur SQL Supabase :
+--
+-- ALTER TABLE stops ADD COLUMN IF NOT EXISTS reference_client TEXT;
+-- ALTER TABLE stops ADD COLUMN IF NOT EXISTS colis_livres INTEGER;
+
 -- Index pour les requêtes courantes
 CREATE INDEX IF NOT EXISTS stops_date_idx  ON stops (date_tournee);
 CREATE INDEX IF NOT EXISTS stops_type_idx  ON stops (type);

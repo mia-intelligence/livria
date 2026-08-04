@@ -22,7 +22,7 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === 'PATCH') {
-    const { statut, ordre, tournee, vehicule, societe_livraison, nombre_colis, emplacement, photo_url, magasin_valide, magasin_valide_at, commentaire_magasin, livreur_colis_confirme, type_produit, groupe_livraison, reference_client, date_tournee, societe, adresse, telephone, numero_affaire, latitude, longitude } = req.body;
+    const { statut, ordre, tournee, vehicule, societe_livraison, nombre_colis, emplacement, photo_url, magasin_valide, magasin_valide_at, commentaire_magasin, livreur_colis_confirme, colis_livres, type_produit, groupe_livraison, reference_client, date_tournee, societe, adresse, telephone, numero_affaire, latitude, longitude } = req.body;
     const VALID_STATUTS  = ['A_LIVRER', 'EN_COURS', 'LIVRE'];
     const VALID_TOURNEES = ['ENLEVEMENT','TOURNEE LUNDI','MARDI T06-T83EST','MERCREDI T13','TOURNEE JEUDI','VENDREDI T83 OUEST','LIVRAISON CHANTIER','TRANSPORTEUR'];
     const VALID_VEHICULES = ['PL', 'VL'];
@@ -80,6 +80,19 @@ module.exports = async function handler(req, res) {
     // Confirmation colis livreur
     if (livreur_colis_confirme !== undefined && ['LIVREUR', 'ADMIN'].includes(role)) {
       updates.livreur_colis_confirme = livreur_colis_confirme;
+    }
+
+    // Nombre de colis réellement livrés — saisi par le livreur
+    if (colis_livres !== undefined && ['LIVREUR', 'ADMIN'].includes(role)) {
+      if (colis_livres !== null) {
+        const n = parseInt(colis_livres, 10);
+        if (Number.isNaN(n) || n < 0) {
+          return res.status(400).json({ error: 'colis_livres invalide' });
+        }
+        updates.colis_livres = n;
+      } else {
+        updates.colis_livres = null;
+      }
     }
 
     // Champs admin complets — ADMIN uniquement

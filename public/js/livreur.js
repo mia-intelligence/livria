@@ -6,6 +6,8 @@ let markerById = {};
 let activeStopId = null;
 let photoGallery = [];  // photos du stop actif pour le modal
 let photoGalleryIndex = 0;
+let livreurTab = 'liste';   // 'liste' | 'route'
+let routeLoaded = false;
 
 const STATUS_LABEL = { A_LIVRER: 'À livrer', EN_COURS: 'En cours', LIVRE: 'Livré' };
 const STATUS_CLASS = { A_LIVRER: 'todo',     EN_COURS: 'now',      LIVRE: 'done' };
@@ -48,6 +50,140 @@ async function loadStops() {
     document.getElementById('stops-list').innerHTML =
       '<div style="text-align:center;padding:40px;color:var(--danger)">Erreur de chargement. Actualisez la page.</div>';
   }
+}
+
+// ── Onglets Liste / Itinéraire ────────────────────────────────
+function switchLivreurTab(tab) {
+  livreurTab = tab;
+  const isRoute = tab === 'route';
+
+  document.getElementById('lv-tab-liste').classList.toggle('active', !isRoute);
+  document.getElementById('lv-tab-route').classList.toggle('active', isRoute);
+  document.getElementById('stops-list').style.display = isRoute ? 'none' : 'flex';
+  document.getElementById('route-panel').classList.toggle('active', isRoute);
+
+  if (isRoute && !routeLoaded) loadRoute();
+}
+
+// ── Feuille de route turn-by-turn ─────────────────────────────
+async function loadRoute() {
+  const panel = document.getElementById('route-panel');
+  panel.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--ink-mute)">Calcul de l\'itinéraire…</div>';
+
+  // Position actuelle si le livreur l'autorise → l'itinéraire démarre de là
+  const start = await getCurrentPosition();
+
+  try {
+    const date = new Date().toISOString().split('T')[0];
+    const qs   = new URLSearchParams({ date });
+    if (start) qs.set('start', start);
+
+    const res  = await fetch(`/api/routing/optimize?${qs}`);
+    const data = await res.json();
+
+    if (!res.ok) {
+      panel.innerHTML = `<div style="text-align:center;padding:40px 20px;color:var(--danger)">${esc(data.error || 'Impossible de calculer l\'itinéraire.')}</div>`;
+      return;
+    }
+    if (!data.legs || !data.legs.length) {
+      panel.innerHTML = `<div style="text-align:center;padding:40px 20px;color:var(--ink-mute)">${esc(data.message || 'Aucun itinéraire à afficher.')}</div>`;
+      return;
+    }
+
+    routeLoaded = true;
+    renderRoute(data);
+  } catch {
+    panel.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--danger)">Erreur réseau. Réessayez.</div>';
+  }
+}
+
+function getCurrentPosition() {
+  return new Promise(resolve => {
+    if (!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      p => resolve(`${p.coords.latitude},${p.coords.longitude}`),
+      () => resolve(null),
+      { timeout: 6000, maximumAge: 60000 }
+    );
+  });
+}
+
+function renderRoute(data) {
+  const panel = document.getElementById('route-panel');
+  const veh   = data.vehicule === 'PL' ? '🚛 Poids lourd' : '🚗 Véhicule léger';
+
+  let html = `
+    <div class="route-summary">
+      <div class="rs-item">
+        <span class="rs-label">Distance totale</span>
+        <span class="rs-value">${fmtKm(data.total.distance_m)}</span>
+      </div>
+      <div class="rs-item">
+        <span class="rs-label">Durée estimée</span>
+        <span class="rs-value">${fmtDuree(data.total.duree_s)}</span>
+      </div>
+      <div class="rs-item">
+        <span class="rs-label">Véhicule</span>
+        <span class="rs-value" style="font-size:14px">${veh}</span>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--ink-mute);margin-bottom:12px">
+      Départ : ${esc(data.depart)} · touchez une étape pour dérouler les instructions
+    </div>`;
+
+  data.legs.forEach((leg, i) => {
+    html += `
+      <div class="route-leg" id="leg-${i}">
+        <div class="route-leg-head" onclick="toggleLeg(${i})">
+          <div class="rl-num">${i + 1}</div>
+          <div class="rl-body">
+            <div class="rl-name">${esc(leg.societe)}</div>
+            <div class="rl-meta">${fmtKm(leg.distance_m)} · ${fmtDuree(leg.duree_s)}${leg.adresse ? ' · ' + esc(leg.adresse) : ''}</div>
+          </div>
+          <div class="rl-chev">›</div>
+        </div>
+        <div class="route-steps">
+          ${leg.steps.length
+            ? leg.steps.map(s => `
+                <div class="route-step">
+                  <span class="rs-icon">${maneuverIcon(s.maneuver)}</span>
+                  <span>${esc(s.text)}${s.rue ? `<div class="rs-dist">${esc(s.rue)}</div>` : ''}</span>
+                </div>`).join('')
+            : '<div class="route-step"><span class="rs-icon">•</span><span>Aucune instruction détaillée pour ce tronçon.</span></div>'}
+        </div>
+      </div>`;
+  });
+
+  panel.innerHTML = html;
+}
+
+function toggleLeg(i) {
+  document.getElementById(`leg-${i}`)?.classList.toggle('open');
+}
+
+// Traduction des manœuvres TomTom en pictos
+function maneuverIcon(m) {
+  if (!m) return '➡';
+  if (m.includes('LEFT'))     return '⬅';
+  if (m.includes('RIGHT'))    return '➡';
+  if (m.includes('ROUNDABOUT')) return '🔄';
+  if (m.includes('UTURN'))    return '↩';
+  if (m.includes('ARRIVE'))   return '🏁';
+  if (m.includes('DEPART'))   return '🚩';
+  if (m.includes('MOTORWAY') || m.includes('FREEWAY')) return '🛣';
+  return '⬆';
+}
+
+function fmtKm(m) {
+  if (!m) return '0 km';
+  return m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1)} km`;
+}
+
+function fmtDuree(s) {
+  if (!s) return '0 min';
+  const h = Math.floor(s / 3600);
+  const min = Math.round((s % 3600) / 60);
+  return h ? `${h} h ${String(min).padStart(2, '0')}` : `${min} min`;
 }
 
 // ── Summary strip ─────────────────────────────────────────────
@@ -108,6 +244,10 @@ function renderStopsList() {
     }
     if (s.emplacement) {
       extras.push(`<span style="font-size:11.5px;color:var(--ink-mute);">${esc(s.emplacement)}</span>`);
+    }
+    if (s.colis_livres !== null && s.colis_livres !== undefined) {
+      const ecart = s.nombre_colis && s.colis_livres !== s.nombre_colis;
+      extras.push(`<span style="display:inline-flex;align-items:center;gap:5px;background:${ecart ? 'var(--warn-soft)' : 'var(--status-done-bg)'};color:${ecart ? '#8A5A12' : 'var(--status-done-fg)'};border-radius:99px;padding:2px 10px;font-size:11.5px;font-weight:600;">${ecart ? '⚠ ' : '✓ '}${esc(String(s.colis_livres))} livré${s.colis_livres > 1 ? 's' : ''}</span>`);
     }
 
     const photos = s.stop_photos || (s.photo_url ? [{ photo_url: s.photo_url }] : []);
@@ -207,6 +347,9 @@ function openSheet(id) {
   // Checkbox colis
   renderColisConfirm(stop);
 
+  // Phrase à trous « J'ai livré ___ colis »
+  renderColisLivres(stop);
+
   renderStatusActions(stop);
 
   document.getElementById('sheet-overlay').classList.add('open');
@@ -272,6 +415,66 @@ function onColisCheckChange() {
   if (stop) renderStatusActions(stop);
 }
 
+// ── « J'ai livré ___ colis » ──────────────────────────────────
+// Visible dès que la livraison est démarrée ou terminée. La saisie
+// est enregistrée au passage en LIVRE (ou immédiatement si déjà livré).
+function renderColisLivres(stop) {
+  const el   = document.getElementById('sheet-colis-livres');
+  const inp  = document.getElementById('in-colis-livres');
+  const att  = document.getElementById('colis-livres-attendu');
+
+  if (stop.statut === 'A_LIVRER') {
+    el.style.display = 'none';
+    return;
+  }
+
+  att.textContent = stop.nombre_colis ? ` sur les ${stop.nombre_colis} prévus` : '';
+  inp.value = (stop.colis_livres ?? '') === '' ? '' : String(stop.colis_livres);
+  el.style.display = 'block';
+  renderColisEcart(stop);
+}
+
+function renderColisEcart(stop) {
+  const box = document.getElementById('colis-livres-ecart');
+  const val = document.getElementById('in-colis-livres').value.trim();
+
+  if (!val || !stop.nombre_colis) { box.style.display = 'none'; return; }
+
+  const n = parseInt(val, 10);
+  if (Number.isNaN(n) || n === stop.nombre_colis) { box.style.display = 'none'; return; }
+
+  const diff = stop.nombre_colis - n;
+  box.textContent = diff > 0
+    ? `⚠ ${diff} colis non livré${diff > 1 ? 's' : ''} sur ${stop.nombre_colis}. Signalez-le à l'ADV.`
+    : `⚠ ${-diff} colis de plus que prévu (${stop.nombre_colis} annoncés).`;
+  box.style.display = 'block';
+}
+
+function onColisLivresInput() {
+  const stop = stops.find(s => s.id === activeStopId);
+  if (stop) renderColisEcart(stop);
+}
+
+async function saveColisLivres(id) {
+  const inp = document.getElementById('in-colis-livres');
+  if (!inp || inp.offsetParent === null) return;      // champ masqué
+  const val = inp.value.trim();
+  if (val === '') return;
+
+  const n = parseInt(val, 10);
+  if (Number.isNaN(n) || n < 0) return;
+
+  try {
+    await fetch(`/api/stops/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ colis_livres: n }),
+    });
+    const stop = stops.find(s => s.id === id);
+    if (stop) stop.colis_livres = n;
+  } catch { /* non-bloquant : le statut prime */ }
+}
+
 function renderStatusActions(stop) {
   const container = document.getElementById('status-actions');
   const cbChecked = document.getElementById('cb-colis-confirme')?.checked;
@@ -310,6 +513,9 @@ async function changeStatus(id, newStatut) {
     } catch { /* non-bloquant */ }
   }
 
+  // Enregistrer le nombre de colis livrés avant de clôturer le stop
+  if (newStatut === 'LIVRE') await saveColisLivres(id);
+
   try {
     const res = await fetch(`/api/stops/${id}`, {
       method: 'PATCH',
@@ -323,10 +529,12 @@ async function changeStatus(id, newStatut) {
     renderStopsList();
     updateSummary();
     updateMapMarker(updated);
+    routeLoaded = false;   // la tournée a changé → itinéraire à recalculer
     const sc  = STATUS_CLASS[updated.statut] || 'todo';
     const lbl = STATUS_LABEL[updated.statut] || updated.statut;
     document.getElementById('sheet-statut-current').innerHTML = `<span class="pill ${sc}">${lbl}</span>`;
     renderColisConfirm(updated);
+    renderColisLivres(updated);
     renderStatusActions(updated);
   } catch {
     alert('Erreur lors de la mise à jour. Réessayez.');
@@ -435,6 +643,10 @@ async function optimizeRoute() {
       updateSummary();
       if (map) { Object.values(markerById).forEach(m => map.removeLayer(m)); markerById = {}; renderMap(stops); }
     }
+
+    // L'ordre a changé → la feuille de route doit être recalculée
+    routeLoaded = false;
+    if (livreurTab === 'route') loadRoute();
 
     const veh = data.vehicule === 'PL' ? '🚛 PL' : '🚗 VL';
     btn.textContent = `✓ Optimisé (${veh})`;
