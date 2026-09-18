@@ -53,6 +53,9 @@ CREATE TABLE IF NOT EXISTS stops (
   groupe_livraison       TEXT,
   -- Champs V4 : référence client (planning) et colis réellement livrés
   reference_client       TEXT,
+  -- Champ V5 : clé arc_commandes.reference_complete de la commande livrée par ce stop
+  -- (choisie dans une liste par l'ADV ; migration scripts/arc/migrations/20260918_stops_arc_reference.sql)
+  arc_reference          TEXT,
   colis_livres           INTEGER CHECK (colis_livres IS NULL OR colis_livres >= 0),
   created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()

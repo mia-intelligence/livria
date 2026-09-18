@@ -341,6 +341,9 @@ function openSheet(id) {
   const lbl = STATUS_LABEL[stop.statut] || stop.statut;
   document.getElementById('sheet-statut-current').innerHTML = `<span class="pill ${sc}">${lbl}</span>`;
 
+  // Règlement lu sur l'ARC : le livreur encaisse le solde à la livraison.
+  renderReglement(stop);
+
   // Info magasin
   renderMagasinInfo(stop);
 
@@ -354,6 +357,28 @@ function openSheet(id) {
 
   document.getElementById('sheet-overlay').classList.add('open');
   document.getElementById('stop-sheet').classList.add('open');
+}
+
+function renderReglement(stop) {
+  const row = document.getElementById('sheet-reglement-row');
+  const el  = document.getElementById('sheet-reglement');
+  const arc = stop.arc;
+  if (!arc) { row.style.display = 'none'; return; }
+
+  const euro = n => Number(n).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
+  const parts = [];
+  if (arc.acompte_present === 'oui') {
+    parts.push(`Acompte versé${arc.montant_acompte != null ? ' : ' + euro(arc.montant_acompte) : ''}`);
+  } else {
+    parts.push('Aucun acompte');
+  }
+  if (arc.montant_solde != null) {
+    parts.push(`<strong style="color:#A14444">Reste dû : ${euro(arc.montant_solde)}</strong>`);
+  } else if (arc.acompte_present !== 'oui' && arc.montant_ttc != null) {
+    parts.push(`<strong style="color:#A14444">Reste dû : ${euro(arc.montant_ttc)}</strong> (total TTC)`);
+  }
+  el.innerHTML = parts.join(' · ');
+  row.style.display = '';
 }
 
 function closeSheet() {

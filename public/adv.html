@@ -293,6 +293,23 @@
 
     <div id="modal-error" style="background:var(--danger-soft);color:#A14444;border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:14px;display:none"></div>
 
+    <!-- Commande ARC : choisie dans la liste, jamais saisie. Pré-remplit le
+         stop et porte la clé (arc_reference) qui ramène l'adresse de livraison
+         sur la commande chaque nuit. -->
+    <div class="field" style="position:relative">
+      <label>Commande ARC <span style="font-weight:400;color:var(--ink-mute);font-size:11px">— tapez une société, une référence ou un n° (P-IN…)</span></label>
+      <input type="text" id="ns-arc-recherche" placeholder="Rechercher la commande…" autocomplete="off"
+             oninput="onArcRechercheInput()" onfocus="onArcRechercheInput()">
+      <input type="hidden" id="ns-arc-reference">
+      <div id="ns-arc-resultats" class="hidden"
+           style="position:absolute;left:0;right:0;top:100%;z-index:20;background:var(--bg);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.08);max-height:260px;overflow-y:auto"></div>
+      <div id="ns-arc-choisi" class="hidden"
+           style="margin-top:8px;padding:10px 12px;border-radius:10px;background:var(--line-soft);font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:10px">
+        <span id="ns-arc-choisi-texte"></span>
+        <button type="button" onclick="clearArcChoisi()" style="border:0;background:none;color:var(--ink-soft);cursor:pointer;font-size:12px">Retirer</button>
+      </div>
+    </div>
+
     <div class="field">
       <label>Société *</label>
       <input type="text" id="ns-societe" placeholder="Nom de la société">

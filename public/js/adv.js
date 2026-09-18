@@ -674,11 +674,113 @@ function openNewStopModal() {
   document.getElementById('ns-groupe-livraison').value = '';
   document.getElementById('ns-date-tournee').value     = new Date().toISOString().split('T')[0];
   document.getElementById('modal-error').style.display = 'none';
+  clearArcChoisi();
+  document.getElementById('ns-arc-recherche').value = '';
+  document.getElementById('ns-arc-resultats').classList.add('hidden');
 }
 
 function closeNewStopModal() {
   document.getElementById('new-stop-modal').classList.add('hidden');
 }
+
+// ── Choix de la commande ARC ───────────────────────────────────
+// La commande vient de arc_commandes (alimentée chaque nuit par le script).
+// Le choix pré-remplit le stop ; l'ADV corrige ensuite ce qu'elle veut,
+// l'adresse de livraison en premier lieu.
+let arcRechercheTimer = null;
+let arcResultats      = [];
+
+function onArcRechercheInput() {
+  clearTimeout(arcRechercheTimer);
+  const q = document.getElementById('ns-arc-recherche').value.trim();
+  if (q.length < 2) {
+    document.getElementById('ns-arc-resultats').classList.add('hidden');
+    return;
+  }
+  arcRechercheTimer = setTimeout(() => rechercheArc(q), 250);
+}
+
+async function rechercheArc(q) {
+  const box = document.getElementById('ns-arc-resultats');
+  try {
+    const res = await fetch(`/api/stops?arc=search&q=${encodeURIComponent(q)}`);
+    if (!res.ok) throw new Error();
+    arcResultats = await res.json();
+  } catch {
+    arcResultats = [];
+  }
+  if (!arcResultats.length) {
+    box.innerHTML = `<div style="padding:10px 12px;color:var(--ink-mute);font-size:13px">Aucune commande ARC ne correspond</div>`;
+    box.classList.remove('hidden');
+    return;
+  }
+  box.innerHTML = arcResultats.map((c, i) => `
+    <div onclick="choisirArc(${i})"
+         style="padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--line-soft);font-size:13px"
+         onmouseover="this.style.background='var(--line-soft)'" onmouseout="this.style.background=''">
+      <div style="display:flex;justify-content:space-between;gap:8px">
+        <strong>${esc(c.societe || '—')}</strong>
+        <span class="muted">${esc(c.numero_document || '')}</span>
+      </div>
+      <div class="muted" style="font-size:12px">
+        ${esc(c.reference || '')}${c.gamme ? ` · ${esc(c.gamme)}` : ''}${c.ville ? ` · ${esc(c.ville)}` : ''}${c.date_document ? ` · ${fmtDateFr(c.date_document)}` : ''}
+        ${c.deja_stop ? '<span style="color:#A14444"> · déjà un stop</span>' : ''}
+      </div>
+    </div>`).join('');
+  box.classList.remove('hidden');
+}
+
+function choisirArc(i) {
+  const c = arcResultats[i];
+  if (!c) return;
+  document.getElementById('ns-arc-reference').value = c.reference_complete;
+  document.getElementById('ns-arc-recherche').value = '';
+  document.getElementById('ns-arc-resultats').classList.add('hidden');
+
+  // Pré-remplissage : l'adresse de facturation sert d'adresse de livraison
+  // par défaut, l'ADV la corrige si le chantier est ailleurs.
+  const adresse = [c.adresse_facturation, [c.code_postal, c.ville].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  document.getElementById('ns-societe').value   = c.societe || '';
+  document.getElementById('ns-adresse').value   = adresse;
+  document.getElementById('ns-telephone').value = c.mobile_client || c.telephone_client || '';
+  document.getElementById('ns-affaire').value   = c.numero_document || '';
+  if (['PVC', 'ALU', 'MIXTE'].includes(c.gamme)) document.getElementById('ns-type-produit').value = c.gamme;
+  // La référence de l'ARC (« GALLO ») relie entre eux les stops PVC et ALU du même client
+  if (!document.getElementById('ns-reference-client').value) {
+    document.getElementById('ns-reference-client').value = c.reference || '';
+  }
+
+  const reglement = c.acompte_present === 'oui'
+    ? `acompte ${c.montant_acompte != null ? fmtEuro(c.montant_acompte) : (c.taux_acompte != null ? c.taux_acompte + ' %' : 'oui')}`
+      + (c.montant_solde != null ? ` · reste dû ${fmtEuro(c.montant_solde)}` : '')
+    : 'sans acompte';
+  document.getElementById('ns-arc-choisi-texte').innerHTML =
+    `<strong>${esc(c.reference_complete)}</strong> <span class="muted">— ${esc(reglement)}</span>`;
+  document.getElementById('ns-arc-choisi').classList.remove('hidden');
+}
+
+function clearArcChoisi() {
+  document.getElementById('ns-arc-reference').value = '';
+  document.getElementById('ns-arc-choisi').classList.add('hidden');
+  document.getElementById('ns-arc-choisi-texte').textContent = '';
+}
+
+function fmtEuro(n) {
+  return Number(n).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
+}
+
+function fmtDateFr(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '');
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : '';
+}
+
+// Fermer la liste de résultats en cliquant ailleurs
+document.addEventListener('click', e => {
+  if (!e.target.closest('#ns-arc-recherche') && !e.target.closest('#ns-arc-resultats')) {
+    const box = document.getElementById('ns-arc-resultats');
+    if (box) box.classList.add('hidden');
+  }
+});
 
 function onNsTourneeChange() {
   const tournee = document.getElementById('ns-tournee').value;
@@ -736,6 +838,7 @@ async function createStop() {
         reference_client,
         groupe_livraison,
         date_tournee,
+        arc_reference:    document.getElementById('ns-arc-reference').value || null,
       })
     });
 

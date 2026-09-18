@@ -1,6 +1,26 @@
 const { getDB } = require('../../lib/db');
 const { requireAuth } = require('../../lib/auth');
 
+// Colonnes de arc_commandes utiles au stop : identification, coordonnées de
+// facturation (adresse de livraison par défaut) et règlement (le livreur
+// encaisse le solde à la livraison).
+const ARC_COLS = [
+  'reference_complete', 'numero_document', 'reference', 'type_document', 'date_document',
+  'societe', 'contact', 'adresse_facturation', 'code_postal', 'ville',
+  'telephone_client', 'mobile_client', 'gamme', 'montant_ttc',
+  'acompte_present', 'montant_acompte', 'taux_acompte', 'solde_avant_livraison', 'montant_solde',
+].join(',');
+
+// Attache à chaque stop les infos de sa commande ARC (clé stops.arc_reference).
+// Une seule requête pour toute la liste ; un stop sans ARC reçoit arc: null.
+async function attacheArc(db, stops) {
+  const refs = [...new Set((stops || []).map(s => s.arc_reference).filter(Boolean))];
+  if (!refs.length) return (stops || []).map(s => ({ ...s, arc: null }));
+  const { data } = await db.from('arc_commandes').select(ARC_COLS).in('reference_complete', refs);
+  const parRef = Object.fromEntries((data || []).map(c => [c.reference_complete, c]));
+  return stops.map(s => ({ ...s, arc: s.arc_reference ? (parRef[s.arc_reference] || null) : null }));
+}
+
 module.exports = async function handler(req, res) {
   const session = await requireAuth(req, res);
   if (!session) return;
@@ -9,6 +29,40 @@ module.exports = async function handler(req, res) {
   const role = session.users.role;
 
   if (req.method === 'GET') {
+    // Recherche d'une commande ARC pour créer un stop : ?arc=search&q=...
+    // Hébergé ici pour rester sous la limite de 12 fonctions Vercel Hobby.
+    // Lit la table alimentée chaque nuit par le script ARC (arc_commandes).
+    if (req.query.arc === 'search') {
+      if (!['ADV', 'ADMIN'].includes(role)) return res.status(403).json({ error: 'Accès refusé' });
+      const q = String(req.query.q || '').trim();
+
+      let query = db
+        .from('arc_commandes')
+        .select(ARC_COLS)
+        .or('type_document.eq.ARC,type_document.is.null')
+        .order('date_document', { ascending: false, nullsFirst: false })
+        .limit(20);
+      if (q) {
+        // Recherche sur la référence complète, la société ou le n° de document.
+        // Les virgules et parenthèses casseraient la syntaxe PostgREST : on les retire.
+        const motif = `%${q.replace(/[,()]/g, ' ')}%`;
+        query = query.or(`reference_complete.ilike.${motif},societe.ilike.${motif},numero_document.ilike.${motif}`);
+      }
+      const { data, error } = await query;
+      if (error) return res.status(500).json({ error: error.message });
+
+      // Une commande qui a déjà un stop est signalée, pas cachée : une
+      // relivraison reste possible.
+      const refs = (data || []).map(c => c.reference_complete);
+      let dejaStop = new Set();
+      if (refs.length) {
+        const { data: existants } = await db
+          .from('stops').select('arc_reference').in('arc_reference', refs);
+        dejaStop = new Set((existants || []).map(s => s.arc_reference));
+      }
+      return res.status(200).json((data || []).map(c => ({ ...c, deja_stop: dejaStop.has(c.reference_complete) })));
+    }
+
     // Planning mode : ?planning=true&from=YYYY-MM-DD&to=YYYY-MM-DD
     if (req.query.planning === 'true') {
       const { from, to } = req.query;
@@ -74,7 +128,7 @@ module.exports = async function handler(req, res) {
 
     const { data, error } = await query;
     if (error) return res.status(500).json({ error: error.message });
-    return res.status(200).json(data);
+    return res.status(200).json(await attacheArc(db, data));
   }
 
   if (req.method === 'POST') {
@@ -97,6 +151,7 @@ module.exports = async function handler(req, res) {
       type_produit,
       groupe_livraison,
       reference_client,
+      arc_reference,
     } = req.body;
 
     if (!societe || !adresse || !societe_livraison) {
@@ -162,12 +217,16 @@ module.exports = async function handler(req, res) {
         type_produit:      type_produit      || null,
         groupe_livraison:  groupe_livraison  || null,
         reference_client:  reference_client  || null,
+        // Clé de la commande ARC choisie dans la liste (jamais saisie) : c'est
+        // par elle que le script nocturne ramène l'adresse sur la commande.
+        arc_reference:     arc_reference     || null,
       })
       .select('*, stop_photos(id, photo_url, created_at)')
       .single();
 
     if (error) return res.status(500).json({ error: error.message });
-    return res.status(201).json(data);
+    const [stop] = await attacheArc(db, [data]);
+    return res.status(201).json(stop);
   }
 
   return res.status(405).json({ error: 'Méthode non autorisée' });
