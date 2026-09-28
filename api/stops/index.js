@@ -2,13 +2,14 @@ const { getDB } = require('../../lib/db');
 const { requireAuth } = require('../../lib/auth');
 
 // Colonnes de arc_commandes utiles au stop : identification, coordonnées de
-// facturation (adresse de livraison par défaut) et règlement (le livreur
-// encaisse le solde à la livraison).
+// facturation (adresse de livraison par défaut), règlement (le livreur
+// encaisse le solde à la livraison) et mode / date de livraison lus sur l'ARC.
 const ARC_COLS = [
   'reference_complete', 'numero_document', 'reference', 'type_document', 'date_document',
   'societe', 'contact', 'adresse_facturation', 'code_postal', 'ville',
   'telephone_client', 'mobile_client', 'gamme', 'montant_ttc',
   'acompte_present', 'montant_acompte', 'taux_acompte', 'solde_avant_livraison', 'montant_solde',
+  'mode_livraison', 'date_livraison_prevue',
 ].join(',');
 
 // Attache à chaque stop les infos de sa commande ARC (clé stops.arc_reference).
@@ -19,6 +20,73 @@ async function attacheArc(db, stops) {
   const { data } = await db.from('arc_commandes').select(ARC_COLS).in('reference_complete', refs);
   const parRef = Object.fromEntries((data || []).map(c => [c.reference_complete, c]));
   return stops.map(s => ({ ...s, arc: s.arc_reference ? (parRef[s.arc_reference] || null) : null }));
+}
+
+// Fenêtre des commandes ARC qui remontent d'elles-mêmes dans « Affaires à
+// planifier » : date de l'ARC dans les N derniers jours. Au-delà, la commande
+// reste trouvable par la recherche. Réglable sans toucher au code (Vercel).
+const ARC_JOURS_A_PLANIFIER = parseInt(process.env.ARC_JOURS_A_PLANIFIER, 10) || 60;
+
+// PostgREST plafonne une réponse à 1 000 lignes : on lit par pages.
+async function toutesLesLignes(construire) {
+  const PAGE = 1000;
+  let lignes = [];
+  for (let debut = 0; ; debut += PAGE) {
+    const { data, error } = await construire().range(debut, debut + PAGE - 1);
+    if (error) throw error;
+    lignes = lignes.concat(data || []);
+    if (!data || data.length < PAGE) return lignes;
+  }
+}
+
+// « Affaires à planifier » : commandes ARC sans stop + stops pas encore placés
+// dans une tournée (ordre 99), toutes dates confondues.
+async function aPlanifier(db, tout) {
+  const depuis = new Date(Date.now() - ARC_JOURS_A_PLANIFIER * 86400000).toISOString().slice(0, 10);
+
+  const arcs = await toutesLesLignes(() => {
+    let q = db.from('arc_commandes').select(ARC_COLS)
+      .or('type_document.eq.ARC,type_document.is.null')
+      // Même filtre que les feuilles LIV : sans numéro, c'est un document hors sujet.
+      .not('numero_document', 'is', null).neq('numero_document', '')
+      .order('date_document', { ascending: false, nullsFirst: false })
+      .order('reference_complete', { ascending: true });
+    if (!tout) q = q.gte('date_document', depuis);
+    return q;
+  });
+
+  // Une commande a un stop si un stop porte sa clé, ou à défaut son numéro
+  // d'affaire (stops créés avant le champ « Commande ARC »).
+  const stops = await toutesLesLignes(() =>
+    db.from('stops').select('arc_reference, numero_affaire').order('id'));
+  const refsStop     = new Set(stops.map(s => s.arc_reference).filter(Boolean));
+  const affairesStop = new Set(stops.map(s => (s.numero_affaire || '').trim().toUpperCase()).filter(Boolean));
+
+  // Table absente (migration pas encore jouée) : on affiche sans masquage.
+  let masques = new Set();
+  try {
+    const lignes = await toutesLesLignes(() =>
+      db.from('arc_masques').select('reference_complete').order('reference_complete'));
+    masques = new Set(lignes.map(m => m.reference_complete));
+  } catch { /* migration 20260928_arc_masques.sql non jouée */ }
+
+  const arcSansStop = arcs.filter(c =>
+    !refsStop.has(c.reference_complete)
+    && !affairesStop.has((c.numero_document || '').trim().toUpperCase())
+    && !masques.has(c.reference_complete));
+
+  const { data: nonPlanifies, error } = await db
+    .from('stops').select('*')
+    .eq('ordre', 99).eq('statut', 'A_LIVRER')
+    .order('date_tournee', { ascending: true });
+  if (error) throw error;
+
+  return {
+    jours: ARC_JOURS_A_PLANIFIER,
+    depuis: tout ? null : depuis,
+    arc: arcSansStop,
+    stops: await attacheArc(db, nonPlanifies),
+  };
 }
 
 module.exports = async function handler(req, res) {
@@ -61,6 +129,16 @@ module.exports = async function handler(req, res) {
         dejaStop = new Set((existants || []).map(s => s.arc_reference));
       }
       return res.status(200).json((data || []).map(c => ({ ...c, deja_stop: dejaStop.has(c.reference_complete) })));
+    }
+
+    // Affaires à planifier : ?arc=a_planifier (60 derniers jours) ou &tout=1
+    if (req.query.arc === 'a_planifier') {
+      if (!['ADV', 'ADMIN'].includes(role)) return res.status(403).json({ error: 'Accès refusé' });
+      try {
+        return res.status(200).json(await aPlanifier(db, req.query.tout === '1'));
+      } catch (e) {
+        return res.status(500).json({ error: e.message });
+      }
     }
 
     // Planning mode : ?planning=true&from=YYYY-MM-DD&to=YYYY-MM-DD
@@ -129,6 +207,20 @@ module.exports = async function handler(req, res) {
     const { data, error } = await query;
     if (error) return res.status(500).json({ error: error.message });
     return res.status(200).json(await attacheArc(db, data));
+  }
+
+  // Masquer / réafficher une commande ARC dans « Affaires à planifier » :
+  // POST ?arc=masquer  { reference_complete, masque: true|false }
+  if (req.method === 'POST' && req.query.arc === 'masquer') {
+    if (!['ADV', 'ADMIN'].includes(role)) return res.status(403).json({ error: 'Accès refusé' });
+    const { reference_complete, masque = true } = req.body || {};
+    if (!reference_complete) return res.status(400).json({ error: 'reference_complete requis' });
+
+    const { error } = masque
+      ? await db.from('arc_masques').upsert({ reference_complete, masque_par: session.users.id })
+      : await db.from('arc_masques').delete().eq('reference_complete', reference_complete);
+    if (error) return res.status(500).json({ error: error.message });
+    return res.status(200).json({ reference_complete, masque: !!masque });
   }
 
   if (req.method === 'POST') {

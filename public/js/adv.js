@@ -7,6 +7,12 @@ let advMap = null;
 let pendingAssignId = null;
 let pendingDeleteId = null;
 
+// « Affaires à planifier » (chargé à part : toutes dates, pas seulement aujourd'hui)
+let arcAPlanifier   = [];    // commandes ARC récentes sans stop
+let stopsAPlanifier = [];    // stops sans place dans une tournée (ordre 99)
+let arcJours        = 60;    // fenêtre renvoyée par l'API (ARC_JOURS_A_PLANIFIER)
+let arcTout         = false; // « Voir aussi les plus anciennes »
+
 // ── Suggestion tournée par code postal ────────────────────────
 // Règles appliquées dans l'ordre ; première correspondance gagne.
 const TOURNEE_RULES = [
@@ -137,6 +143,7 @@ async function loadStops() {
 
     allStops = await res.json();
     pendingRowChanges = {};
+    await loadAPlanifier();
 
     renderDashboard();
     renderAffaires();
@@ -147,12 +154,27 @@ async function loadStops() {
   }
 }
 
+// Commandes ARC sans stop + stops non planifiés, toutes dates.
+// En cas d'échec, on garde la dernière liste connue.
+async function loadAPlanifier() {
+  try {
+    const res = await fetch(`/api/stops?arc=a_planifier${arcTout ? '&tout=1' : ''}`);
+    if (!res.ok) throw new Error(await res.text());
+    const d = await res.json();
+    arcAPlanifier   = d.arc   || [];
+    stopsAPlanifier = d.stops || [];
+    arcJours        = d.jours || arcJours;
+  } catch (error) {
+    console.error('Erreur chargement affaires à planifier:', error);
+  }
+}
+
 // ── Dashboard ──────────────────────────────────────────────────
 function renderDashboard() {
   const today = allStops;
   const done = today.filter(s => s.statut === 'LIVRE').length;
   const pending = today.filter(s => s.statut !== 'LIVRE').length;
-  const unplanned = today.filter(s => s.ordre === 99).length;
+  const unplanned = stopsAPlanifier.length + arcAPlanifier.length;
   const pct = today.length ? Math.round((done / today.length) * 100) : 0;
 
   document.getElementById('kpi-total').textContent = today.length;
@@ -192,28 +214,108 @@ function renderDashboard() {
 }
 
 function renderAffairesPreview() {
-  const unplanned = allStops.filter(s => s.ordre === 99).slice(0, 3);
   const el = document.getElementById('dash-affaires-preview');
+  const stops = stopsAPlanifier.slice(0, 3);
+  const arcs  = arcAPlanifier.slice(0, 3 - stops.length);
 
-  if (!unplanned.length) {
+  if (!stops.length && !arcs.length) {
     el.innerHTML = '<p style="color:var(--ink-mute);font-size:13px;text-align:center;padding:16px 0">Aucune affaire en attente ✓</p>';
     return;
   }
 
-  el.innerHTML = unplanned.map(s => affaireRowHTML(s, true)).join('');
+  el.innerHTML = stops.map(s => affaireRowHTML(s, true)).join('')
+    + arcs.map((c, i) => arcRowHTML(c, i, true)).join('');
 }
 
 // ── Affaires à planifier ───────────────────────────────────────
+// Deux listes : les commandes ARC qui n'ont pas encore de stop (remontent
+// d'elles-mêmes sur les N derniers jours), puis les stops créés mais pas
+// encore placés dans une tournée.
 function renderAffaires() {
-  const unplanned = allStops.filter(s => s.ordre === 99);
   const el = document.getElementById('affaires-list');
+  const titre = (texte, n) =>
+    `<h3 style="margin:4px 0 6px;font-size:14px;font-weight:700">${texte} <span class="muted" style="font-weight:600">· ${n}</span></h3>`;
 
-  if (!unplanned.length) {
-    el.innerHTML = '<p style="color:var(--ink-mute);font-size:13px;text-align:center;padding:32px 0">Aucune affaire en attente — toutes ont été planifiées ✓</p>';
-    return;
+  const perimetre = arcTout
+    ? `Toutes les commandes ARC · <a style="cursor:pointer;color:var(--turquoise);font-weight:600" onclick="basculerArcTout(false)">Revenir aux ${arcJours} derniers jours</a>`
+    : `ARC des ${arcJours} derniers jours · <a style="cursor:pointer;color:var(--turquoise);font-weight:600" onclick="basculerArcTout(true)">Voir aussi les plus anciennes</a>`;
+
+  let html = titre('Commandes ARC sans stop', arcAPlanifier.length)
+    + `<div class="muted" style="font-size:12px;margin-bottom:6px">${perimetre}</div>`;
+  html += arcAPlanifier.length
+    ? arcAPlanifier.map((c, i) => arcRowHTML(c, i, false)).join('')
+    : '<p style="color:var(--ink-mute);font-size:13px;text-align:center;padding:16px 0">Toutes les commandes ARC ont un stop ✓</p>';
+
+  html += '<div style="height:18px"></div>' + titre('Stops à placer dans une tournée', stopsAPlanifier.length);
+  html += stopsAPlanifier.length
+    ? stopsAPlanifier.map(s => affaireRowHTML(s, false)).join('')
+    : '<p style="color:var(--ink-mute);font-size:13px;text-align:center;padding:16px 0">Aucun stop en attente — tous ont été planifiés ✓</p>';
+
+  el.innerHTML = html;
+}
+
+function arcRowHTML(c, i, compact) {
+  const mode   = MODES_ARC[c.mode_livraison];
+  const ville  = [c.code_postal, c.ville].filter(Boolean).join(' ');
+  const meta = [
+    c.numero_document ? `N° ${esc(c.numero_document)}` : '',
+    c.reference ? esc(c.reference) : '',
+    c.gamme ? esc(c.gamme) : '',
+    c.date_document ? `ARC du ${fmtDateFr(c.date_document)}` : 'ARC non daté',
+    mode ? esc(mode) + (c.date_livraison_prevue ? ` le ${fmtDateFr(c.date_livraison_prevue)}` : '') : '',
+  ].filter(Boolean).join(' · ');
+
+  return `
+    <div class="affaire-row">
+      <div style="width:10px;height:10px;border-radius:2px;background:var(--ink-mute);flex-shrink:0;margin-top:4px" title="Commande ARC sans stop"></div>
+      <div class="affaire-info">
+        <div class="a-name">${esc(c.societe || '—')}</div>
+        <div class="a-addr">${esc(ville || c.adresse_facturation || '')}</div>
+        <div class="a-meta">${meta}</div>
+      </div>
+      ${!compact ? `
+        <div style="display:flex;gap:6px;flex-shrink:0">
+          <button class="btn sm" onclick="masquerArc(${i})" title="Livrée hors Livrial, annulée… Reste trouvable par la recherche">Masquer</button>
+          <button class="btn sm primary" onclick="creerStopDepuisArc(${i})">Créer le stop</button>
+        </div>` : ''}
+    </div>
+  `;
+}
+
+async function basculerArcTout(tout) {
+  arcTout = tout;
+  document.getElementById('affaires-list').innerHTML =
+    '<div style="color:var(--ink-mute);font-size:13px;text-align:center;padding:32px 0">Chargement…</div>';
+  await loadAPlanifier();
+  renderDashboard();
+  renderAffaires();
+}
+
+// Ouvre « Nouvelle livraison » pré-rempli avec la commande
+function creerStopDepuisArc(i) {
+  const c = arcAPlanifier[i];
+  if (!c) return;
+  openNewStopModal();
+  appliquerArc(c);
+}
+
+async function masquerArc(i) {
+  const c = arcAPlanifier[i];
+  if (!c) return;
+  if (!confirm(`Masquer ${c.societe || c.reference_complete} (${c.numero_document || ''}) de la liste ?\n\nLa commande restera trouvable par la recherche « Nouvelle livraison ».`)) return;
+  try {
+    const res = await fetch('/api/stops?arc=masquer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reference_complete: c.reference_complete, masque: true }),
+    });
+    if (!res.ok) throw new Error();
+    arcAPlanifier = arcAPlanifier.filter(a => a.reference_complete !== c.reference_complete);
+    renderDashboard();
+    renderAffaires();
+  } catch {
+    alert('Impossible de masquer cette commande. Réessayez.');
   }
-
-  el.innerHTML = unplanned.map(s => affaireRowHTML(s, false)).join('');
 }
 
 function affaireRowHTML(s, compact) {
@@ -261,7 +363,7 @@ function affaireRowHTML(s, compact) {
 
 // ── Assign modal ───────────────────────────────────────────────
 function openAssignModal(id) {
-  const stop = allStops.find(s => s.id === id);
+  const stop = stopsAPlanifier.find(s => s.id === id) || allStops.find(s => s.id === id);
   if (!stop) return;
 
   pendingAssignId = id;
@@ -317,7 +419,17 @@ async function confirmAssign() {
   }
 
   try {
-    const maxOrdre = allStops
+    // Le stop prend la dernière place de SA journée, qui n'est pas
+    // forcément aujourd'hui (la liste couvre toutes les dates).
+    const stop  = stopsAPlanifier.find(s => s.id === pendingAssignId) || allStops.find(s => s.id === pendingAssignId);
+    const today = new Date().toISOString().split('T')[0];
+    let duJour  = allStops;
+    if (stop?.date_tournee && stop.date_tournee !== today) {
+      const r = await fetch(`/api/stops?date=${stop.date_tournee}`);
+      if (!r.ok) throw new Error();
+      duJour = await r.json();
+    }
+    const maxOrdre = duJour
       .filter(s => s.ordre !== 99)
       .reduce((m, s) => Math.max(m, s.ordre || 0), 0);
 
@@ -690,6 +802,13 @@ function closeNewStopModal() {
 let arcRechercheTimer = null;
 let arcResultats      = [];
 
+// Libellé affiché pour arc_commandes.mode_livraison (= stops.societe_livraison)
+const MODES_ARC = {
+  ATRIAL:       'livraison Atrial',
+  ENLEVEMENT:   'enlèvement client',
+  TRANSPORTEUR: 'départ usine transporteur',
+};
+
 function onArcRechercheInput() {
   clearTimeout(arcRechercheTimer);
   const q = document.getElementById('ns-arc-recherche').value.trim();
@@ -731,8 +850,10 @@ async function rechercheArc(q) {
 }
 
 function choisirArc(i) {
-  const c = arcResultats[i];
-  if (!c) return;
+  if (arcResultats[i]) appliquerArc(arcResultats[i]);
+}
+
+function appliquerArc(c) {
   document.getElementById('ns-arc-reference').value = c.reference_complete;
   document.getElementById('ns-arc-recherche').value = '';
   document.getElementById('ns-arc-resultats').classList.add('hidden');
@@ -750,12 +871,29 @@ function choisirArc(i) {
     document.getElementById('ns-reference-client').value = c.reference || '';
   }
 
+  // Mode de livraison : lu sur le libellé de la date de l'ARC (« Date de
+  // livraison » / « Date d'enlèvement » / « Date de départ usine »).
+  // Enlèvement et transporteur ont leur propre tournée ; pour ATRIAL, le jour
+  // de tournée reste au choix de l'ADV.
+  if (MODES_ARC[c.mode_livraison]) {
+    const tourneeEl = document.getElementById('ns-tournee');
+    document.getElementById('ns-type').value = c.mode_livraison;
+    if (c.mode_livraison !== 'ATRIAL') tourneeEl.value = c.mode_livraison;
+    else if (['ENLEVEMENT', 'TRANSPORTEUR'].includes(tourneeEl.value)) tourneeEl.value = '';
+  }
+  if (c.date_livraison_prevue) {
+    document.getElementById('ns-date-tournee').value = c.date_livraison_prevue.slice(0, 10);
+  }
+
   const reglement = c.acompte_present === 'oui'
     ? `acompte ${c.montant_acompte != null ? fmtEuro(c.montant_acompte) : (c.taux_acompte != null ? c.taux_acompte + ' %' : 'oui')}`
       + (c.montant_solde != null ? ` · reste dû ${fmtEuro(c.montant_solde)}` : '')
     : 'sans acompte';
+  const mode = MODES_ARC[c.mode_livraison]
+    ? `${MODES_ARC[c.mode_livraison]}${c.date_livraison_prevue ? ' le ' + fmtDateFr(c.date_livraison_prevue) : ''} · `
+    : '';
   document.getElementById('ns-arc-choisi-texte').innerHTML =
-    `<strong>${esc(c.reference_complete)}</strong> <span class="muted">— ${esc(reglement)}</span>`;
+    `<strong>${esc(c.reference_complete)}</strong> <span class="muted">— ${esc(mode + reglement)}</span>`;
   document.getElementById('ns-arc-choisi').classList.remove('hidden');
 }
 
