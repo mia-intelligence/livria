@@ -39,10 +39,25 @@ async function toutesLesLignes(construire) {
   }
 }
 
+// L'application de suivi d'Atrial écrit le statut de chaque affaire dans
+// arc_commandes.statut_suivi. « fini » = fabrication terminée et solde
+// encaissé : la seule étape où l'ADV doit créer le stop.
+const STATUT_PRET_A_LIVRER = 'fini';
+
+// Vrai dès qu'un statut est arrivé. Faux avant la migration
+// 20261005_arc_statut_suivi.sql ou la mise en service de l'envoi : la liste
+// garde alors son affichage par date.
+async function suiviActif(db) {
+  const { data, error } = await db.from('arc_commandes')
+    .select('reference_complete').not('statut_suivi', 'is', null).limit(1);
+  return !error && (data || []).length > 0;
+}
+
 // « Affaires à planifier » : commandes ARC sans stop + stops pas encore placés
 // dans une tournée (ordre 99), toutes dates confondues.
 async function aPlanifier(db, tout) {
   const depuis = new Date(Date.now() - ARC_JOURS_A_PLANIFIER * 86400000).toISOString().slice(0, 10);
+  const suivi = await suiviActif(db);
 
   const arcs = await toutesLesLignes(() => {
     let q = db.from('arc_commandes').select(ARC_COLS)
@@ -51,7 +66,9 @@ async function aPlanifier(db, tout) {
       .not('numero_document', 'is', null).neq('numero_document', '')
       .order('date_document', { ascending: false, nullsFirst: false })
       .order('reference_complete', { ascending: true });
-    if (!tout) q = q.gte('date_document', depuis);
+    // Avec le suivi, c'est le statut qui trie, quelle que soit la date de l'ARC.
+    if (suivi) q = q.eq('statut_suivi', STATUT_PRET_A_LIVRER);
+    else if (!tout) q = q.gte('date_document', depuis);
     return q;
   });
 
@@ -83,7 +100,8 @@ async function aPlanifier(db, tout) {
 
   return {
     jours: ARC_JOURS_A_PLANIFIER,
-    depuis: tout ? null : depuis,
+    depuis: tout || suivi ? null : depuis,
+    suivi,
     arc: arcSansStop,
     stops: await attacheArc(db, nonPlanifies),
   };

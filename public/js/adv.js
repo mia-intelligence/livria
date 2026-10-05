@@ -12,6 +12,7 @@ let arcAPlanifier   = [];    // commandes ARC récentes sans stop
 let stopsAPlanifier = [];    // stops sans place dans une tournée (ordre 99)
 let arcJours        = 60;    // fenêtre renvoyée par l'API (ARC_JOURS_A_PLANIFIER)
 let arcTout         = false; // « Voir aussi les plus anciennes »
+let arcSuivi        = false; // liste triée par le statut du suivi d'affaires (terminées, solde encaissé)
 
 // ── Suggestion tournée par code postal ────────────────────────
 // Règles appliquées dans l'ordre ; première correspondance gagne.
@@ -164,6 +165,7 @@ async function loadAPlanifier() {
     arcAPlanifier   = d.arc   || [];
     stopsAPlanifier = d.stops || [];
     arcJours        = d.jours || arcJours;
+    arcSuivi        = !!d.suivi;
   } catch (error) {
     console.error('Erreur chargement affaires à planifier:', error);
   }
@@ -236,15 +238,17 @@ function renderAffaires() {
   const titre = (texte, n) =>
     `<h3 style="margin:4px 0 6px;font-size:14px;font-weight:700">${texte} <span class="muted" style="font-weight:600">· ${n}</span></h3>`;
 
-  const perimetre = arcTout
+  const perimetre = arcSuivi
+    ? 'Fabrication terminée et solde encaissé, d\'après le suivi d\'affaires'
+    : arcTout
     ? `Toutes les commandes ARC · <a style="cursor:pointer;color:var(--turquoise);font-weight:600" onclick="basculerArcTout(false)">Revenir aux ${arcJours} derniers jours</a>`
     : `ARC des ${arcJours} derniers jours · <a style="cursor:pointer;color:var(--turquoise);font-weight:600" onclick="basculerArcTout(true)">Voir aussi les plus anciennes</a>`;
 
-  let html = titre('Commandes ARC sans stop', arcAPlanifier.length)
+  let html = titre(arcSuivi ? 'Affaires terminées, prêtes à livrer' : 'Commandes ARC sans stop', arcAPlanifier.length)
     + `<div class="muted" style="font-size:12px;margin-bottom:6px">${perimetre}</div>`;
   html += arcAPlanifier.length
     ? arcAPlanifier.map((c, i) => arcRowHTML(c, i, false)).join('')
-    : '<p style="color:var(--ink-mute);font-size:13px;text-align:center;padding:16px 0">Toutes les commandes ARC ont un stop ✓</p>';
+    : `<p style="color:var(--ink-mute);font-size:13px;text-align:center;padding:16px 0">${arcSuivi ? 'Aucune affaire terminée en attente de stop ✓' : 'Toutes les commandes ARC ont un stop ✓'}</p>`;
 
   html += '<div style="height:18px"></div>' + titre('Stops à placer dans une tournée', stopsAPlanifier.length);
   html += stopsAPlanifier.length
