@@ -9,7 +9,7 @@ module.exports = async function handler(req, res) {
 
   const { id } = req.query;
   const db = getDB();
-  const adminEmail = session.users.email;
+  const adminIdentifiant = session.users.identifiant;
 
   if (req.method === 'PATCH') {
     const { actif, password } = req.body;
@@ -37,7 +37,7 @@ module.exports = async function handler(req, res) {
       .from('users')
       .update(updates)
       .eq('id', id)
-      .select('id, nom, prenom, email, role, actif')
+      .select('id, nom, prenom, identifiant, role, actif')
       .single();
 
     if (error) return res.status(500).json({ error: error.message });
@@ -45,12 +45,12 @@ module.exports = async function handler(req, res) {
 
     if (updates.actif === false) {
       await db.from('sessions').delete().eq('user_id', id);
-      await log(adminEmail, 'USER_REVOKED', { target: data.email });
+      await log(adminIdentifiant, 'USER_REVOKED', { target: data.identifiant });
     } else if (updates.actif === true) {
-      await log(adminEmail, 'USER_REACTIVATED', { target: data.email });
+      await log(adminIdentifiant, 'USER_REACTIVATED', { target: data.identifiant });
     }
     if (updates.password_hash) {
-      await log(adminEmail, 'PASSWORD_RESET', { target: data.email });
+      await log(adminIdentifiant, 'PASSWORD_RESET', { target: data.identifiant });
     }
 
     return res.status(200).json(data);
@@ -59,7 +59,7 @@ module.exports = async function handler(req, res) {
   if (req.method === 'GET') {
     const { data, error } = await db
       .from('users')
-      .select('id, nom, prenom, email, role, actif, created_at, last_login')
+      .select('id, nom, prenom, identifiant, role, actif, created_at, last_login')
       .eq('id', id)
       .single();
 

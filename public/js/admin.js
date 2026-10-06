@@ -100,7 +100,7 @@ function renderUsers() {
           <div><div class="strong">${esc(u.prenom)} ${esc(u.nom)}</div></div>
         </div>
       </td>
-      <td class="muted">${esc(u.email)}</td>
+      <td class="muted">${esc(u.identifiant)}</td>
       <td><span class="role-badge ${u.role}">${u.role}</span></td>
       <td>
         ${u.actif
@@ -128,7 +128,7 @@ function renderUsers() {
 
 // ── Create user ────────────────────────────────────────────────
 function openCreateModal() {
-  ['cu-prenom','cu-nom','cu-email','cu-password'].forEach(id => {
+  ['cu-prenom','cu-nom','cu-identifiant','cu-password'].forEach(id => {
     document.getElementById(id).value = '';
   });
   document.getElementById('cu-role').value = 'LIVREUR';
@@ -142,13 +142,13 @@ function closeCreateModal() {
 async function createUser() {
   const prenom   = document.getElementById('cu-prenom').value.trim();
   const nom      = document.getElementById('cu-nom').value.trim();
-  const email    = document.getElementById('cu-email').value.trim();
+  const identifiant = document.getElementById('cu-identifiant').value.trim();
   const role     = document.getElementById('cu-role').value;
   const password = document.getElementById('cu-password').value;
   const errEl    = document.getElementById('create-error');
   errEl.style.display = 'none';
 
-  if (!prenom || !nom || !email || !password) {
+  if (!prenom || !nom || !identifiant || !password) {
     errEl.textContent = 'Tous les champs marqués * sont obligatoires.';
     errEl.style.display = 'block'; return;
   }
@@ -161,7 +161,7 @@ async function createUser() {
     const res = await fetch('/api/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prenom, nom, email, role, password }),
+      body: JSON.stringify({ prenom, nom, identifiant, role, password }),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -183,7 +183,7 @@ function openResetPwdModal(id) {
   if (!user) return;
   pendingResetId = id;
   document.getElementById('reset-pwd-desc').textContent =
-    `${user.prenom} ${user.nom} (${user.email})`;
+    `${user.prenom} ${user.nom} (${user.identifiant})`;
   document.getElementById('reset-pwd-input').value = '';
   document.getElementById('reset-pwd-error').style.display = 'none';
   document.getElementById('reset-pwd-modal').classList.remove('hidden');
@@ -230,7 +230,7 @@ function openRevokeModal(id) {
   if (!user) return;
   pendingRevokeId = id;
   document.getElementById('revoke-desc').textContent =
-    `${user.prenom} ${user.nom} (${user.email}) — ${user.role}`;
+    `${user.prenom} ${user.nom} (${user.identifiant}) — ${user.role}`;
   document.getElementById('revoke-modal').classList.remove('hidden');
 }
 function closeRevokeModal() {
@@ -413,7 +413,7 @@ function renderLogs(logs) {
       <div class="log-dot ${dotClass}"></div>
       <div>
         <div><span class="log-action">${esc(l.action)}</span>
-          ${l.user_email ? `<span class="log-detail"> — ${esc(l.user_email)}</span>` : ''}</div>
+          ${l.user_identifiant ? `<span class="log-detail"> — ${esc(l.user_identifiant)}</span>` : ''}</div>
         ${detail ? `<div class="log-detail">${esc(detail)}</div>` : ''}
       </div>
       <div class="log-time">${formatDate(l.created_at)}</div>

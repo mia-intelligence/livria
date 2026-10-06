@@ -9,10 +9,10 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: 'Méthode non autorisée' });
   }
 
-  const { email, password } = req.body;
+  const { identifiant, password } = req.body;
 
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email et mot de passe requis' });
+  if (!identifiant || !password) {
+    return res.status(400).json({ error: 'Identifiant et mot de passe requis' });
   }
 
   const db = getDB();
@@ -20,7 +20,7 @@ module.exports = async function handler(req, res) {
   const { data: user } = await db
     .from('users')
     .select('*')
-    .eq('email', email.toLowerCase().trim())
+    .eq('identifiant', identifiant.toLowerCase().trim())
     .single();
 
   if (!user) {
@@ -50,7 +50,7 @@ module.exports = async function handler(req, res) {
   await db.from('users').update({ last_login: new Date().toISOString() }).eq('id', user.id);
 
   setSessionCookie(res, token);
-  await log(user.email, 'LOGIN', { role: user.role });
+  await log(user.identifiant, 'LOGIN', { role: user.role });
 
   return res.status(200).json({
     role: user.role,

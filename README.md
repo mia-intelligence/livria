@@ -141,7 +141,7 @@ Ou utiliser une [Vercel Edge Middleware](https://vercel.com/docs/functions/edge-
 
 ## 5. Comptes de test
 
-| Email | Mot de passe | Rôle |
+| Identifiant | Mot de passe | Rôle |
 |---|---|---|
 | admin@atrial.fr | Admin123 | ADMIN |
 | adv@atrial.fr | Adv123 | ADV |

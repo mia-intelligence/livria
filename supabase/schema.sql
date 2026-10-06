@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS users (
   id            UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
   nom           TEXT        NOT NULL,
   prenom        TEXT        NOT NULL,
-  email         TEXT        NOT NULL UNIQUE,
+  identifiant   TEXT        NOT NULL UNIQUE,
   password_hash TEXT        NOT NULL,
   role          TEXT        NOT NULL CHECK (role IN ('LIVREUR', 'ADV', 'ADMIN', 'MAGASIN')),
   actif         BOOLEAN     NOT NULL DEFAULT TRUE,
@@ -147,11 +147,11 @@ CREATE TRIGGER stops_updated_at
 -- À créer dans Supabase Dashboard > SQL Editor
 CREATE TABLE IF NOT EXISTS activity_logs (
   id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_email  TEXT,
+  user_identifiant  TEXT,
   action      TEXT NOT NULL,
   details     JSONB DEFAULT '{}',
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS activity_logs_created_at_idx ON activity_logs(created_at DESC);
-CREATE INDEX IF NOT EXISTS activity_logs_user_email_idx ON activity_logs(user_email);
+CREATE INDEX IF NOT EXISTS activity_logs_user_identifiant_idx ON activity_logs(user_identifiant);

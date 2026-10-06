@@ -15,7 +15,7 @@
 -- Pour générer vos propres hashes :
 --   node -e "const b=require('bcrypt'); b.hash('Admin123',10).then(console.log)"
 
-INSERT INTO users (id, nom, prenom, email, password_hash, role, actif)
+INSERT INTO users (id, nom, prenom, identifiant, password_hash, role, actif)
 VALUES
   (
     uuid_generate_v4(),
@@ -49,7 +49,7 @@ VALUES
     '$2b$10$PGowBYkvjTx0RD2GnmxPU.j7xxXDx6CuhVj1BgDpxzSpsmJVjLe1i',
     'MAGASIN', TRUE
   )
-ON CONFLICT (email) DO NOTHING;
+ON CONFLICT (identifiant) DO NOTHING;
 
 -- ── Stops de test (aujourd'hui) ─────────────────────────────────
 INSERT INTO stops (societe, adresse, telephone, latitude, longitude, numero_affaire, type, statut, ordre, date_tournee)

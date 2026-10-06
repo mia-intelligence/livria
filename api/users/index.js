@@ -13,7 +13,7 @@ module.exports = async function handler(req, res) {
   if (req.method === 'GET') {
     const { data, error } = await db
       .from('users')
-      .select('id, nom, prenom, email, role, actif, created_at, last_login')
+      .select('id, nom, prenom, identifiant, role, actif, created_at, last_login')
       .order('created_at', { ascending: false });
 
     if (error) return res.status(500).json({ error: error.message });
@@ -21,9 +21,9 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    const { nom, prenom, email, role, password } = req.body;
+    const { nom, prenom, identifiant, role, password } = req.body;
 
-    if (!nom || !prenom || !email || !role || !password) {
+    if (!nom || !prenom || !identifiant || !role || !password) {
       return res.status(400).json({ error: 'Tous les champs sont requis' });
     }
 
@@ -32,15 +32,15 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: 'Rôle invalide' });
     }
 
-    // Vérifier unicité email
+    // Vérifier unicité identifiant
     const { data: existing } = await db
       .from('users')
       .select('id')
-      .eq('email', email.toLowerCase().trim())
+      .eq('identifiant', identifiant.toLowerCase().trim())
       .single();
 
     if (existing) {
-      return res.status(409).json({ error: 'Cet email est déjà utilisé' });
+      return res.status(409).json({ error: 'Cet identifiant est déjà utilisé' });
     }
 
     const password_hash = await bcrypt.hash(password, 10);
@@ -51,16 +51,16 @@ module.exports = async function handler(req, res) {
         id: uuidv4(),
         nom,
         prenom,
-        email: email.toLowerCase().trim(),
+        identifiant: identifiant.toLowerCase().trim(),
         password_hash,
         role,
         actif: true,
       })
-      .select('id, nom, prenom, email, role, actif, created_at')
+      .select('id, nom, prenom, identifiant, role, actif, created_at')
       .single();
 
     if (error) return res.status(500).json({ error: error.message });
-    await log(session.users.email, 'USER_CREATED', { target: data.email, role: data.role });
+    await log(session.users.identifiant, 'USER_CREATED', { target: data.identifiant, role: data.role });
     return res.status(201).json(data);
   }
 

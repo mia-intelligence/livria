@@ -15,7 +15,7 @@ module.exports = async function handler(req, res) {
     id: u.id,
     nom: u.nom,
     prenom: u.prenom,
-    email: u.email,
+    identifiant: u.identifiant,
     role: u.role,
   });
 };

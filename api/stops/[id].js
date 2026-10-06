@@ -143,10 +143,10 @@ module.exports = async function handler(req, res) {
     if (!data) return res.status(404).json({ error: 'Stop introuvable' });
 
     // Log actions clés
-    const userEmail = session.users.email;
-    if (updates.statut) await log(userEmail, `STOP_${updates.statut}`, { stop_id: id, societe: data.societe });
-    if (updates.magasin_valide) await log(userEmail, 'STOP_MAGASIN_VALIDE', { stop_id: id, societe: data.societe, colis: data.nombre_colis });
-    if (updates.password_hash) await log(userEmail, 'PASSWORD_RESET', { stop_id: id });
+    const userIdentifiant = session.users.identifiant;
+    if (updates.statut) await log(userIdentifiant, `STOP_${updates.statut}`, { stop_id: id, societe: data.societe });
+    if (updates.magasin_valide) await log(userIdentifiant, 'STOP_MAGASIN_VALIDE', { stop_id: id, societe: data.societe, colis: data.nombre_colis });
+    if (updates.password_hash) await log(userIdentifiant, 'PASSWORD_RESET', { stop_id: id });
 
     return res.status(200).json(data);
   }
