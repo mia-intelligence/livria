@@ -5,7 +5,10 @@ let activePrepId = null;
 let pendingPhotos = [];   // {base64, type} — photos à uploader
 let existingPhotos = [];  // {id, photo_url} — photos déjà en DB
 
-let activeTab = 'today';       // 'today' | 'tomorrow' | 'week'
+// 'aprep' = tout ce qui reste à préparer, quelle que soit la date (page
+// d'accueil : un stop créé au statut « fini » arrive ici avant d'avoir une
+// date de tournée). Les autres onglets restent par date.
+let activeTab = 'aprep';       // 'aprep' | 'today' | 'tomorrow' | 'week'
 let weekAnchor = startOfWeek(new Date()); // lundi de la semaine affichée
 
 const DAYS_FR   = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
@@ -19,7 +22,7 @@ async function init() {
 }
 
 // ── Onglets Aujourd'hui / Demain / Semaine ────────────────────
-const TABS = { today: 'tab-today', tomorrow: 'tab-tomorrow', week: 'tab-week' };
+const TABS = { aprep: 'tab-aprep', today: 'tab-today', tomorrow: 'tab-tomorrow', week: 'tab-week' };
 
 function switchTab(tab) {
   activeTab = tab;
@@ -76,6 +79,11 @@ function fmtDate(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
+// 'YYYY-MM-DD' → 'mardi 15 octobre'
+function fmtDateFr(iso) {
+  return new Date(iso + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+
 async function logout() {
   await fetch('/api/auth/logout', { method: 'POST' });
   window.location.href = '/';
@@ -107,6 +115,8 @@ async function loadStops() {
     if (isWeek) {
       const { from, to } = getWeekRange();
       url = `/api/stops?from=${from}&to=${to}`;
+    } else if (activeTab === 'aprep') {
+      url = '/api/stops?magasin=a_preparer';
     } else {
       url = `/api/stops?date=${getTabDate()}`;
     }
@@ -218,13 +228,20 @@ function renderList() {
   const container = document.getElementById('stops-list');
 
   if (!stops.length) {
-    container.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--ink-mute);">Aucun stop prévu aujourd\'hui.</div>';
+    container.innerHTML = activeTab === 'aprep'
+      ? '<div style="text-align:center;padding:40px 20px;color:var(--ink-mute);">Rien à préparer, tout est validé ✓</div>'
+      : '<div style="text-align:center;padding:40px 20px;color:var(--ink-mute);">Aucun stop prévu aujourd\'hui.</div>';
     return;
   }
 
   container.innerHTML = stops.map((s, i) => {
     const ms  = getMagasinStatus(s);
-    const num = s.ordre ?? (i + 1);
+    // Onglet « À préparer » : la position dans la tournée n'a pas de sens
+    // (le stop n'est souvent pas encore placé) ; on numérote la liste.
+    const num = activeTab === 'aprep' ? i + 1 : (s.ordre ?? (i + 1));
+    const dateLine = activeTab === 'aprep'
+      ? `<div style="font-size:12px;color:${s.date_tournee ? 'var(--ink-soft)' : '#8A5A12'};margin-top:3px">${s.date_tournee ? '📅 ' + fmtDateFr(s.date_tournee) : '📅 Date de tournée à fixer par l\'ADV'}</div>`
+      : '';
 
     const numClass = s.statut === 'LIVRE' ? 'done' : ms === 'pret' ? 'ready' : 'prep';
 
@@ -262,8 +279,10 @@ function renderList() {
         <div class="stop-addr">${esc(s.adresse)}</div>
         <div class="stop-meta">
           ${s.numero_affaire ? `N° ${esc(s.numero_affaire)}` : ''}
+          ${s.type_produit ? `<span style="font-size:11px;color:var(--ink-mute)">${esc(s.type_produit)}</span>` : ''}
           ${badge}
         </div>
+        ${dateLine}
         ${footer}
       </div>
     </div>`;
@@ -283,7 +302,7 @@ function openPrepSheet(id) {
   const meta = [
     stop.numero_affaire ? `N° ${stop.numero_affaire}` : null,
     stop.tournee        ? stop.tournee                 : null,
-    stop.date_tournee   ? `Livraison le ${new Date(stop.date_tournee + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}` : null,
+    stop.date_tournee   ? `Livraison le ${new Date(stop.date_tournee + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}` : 'Date de tournée à fixer par l\'ADV',
   ].filter(Boolean).join(' · ');
   document.getElementById('prep-meta').textContent = meta;
 

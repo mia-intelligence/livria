@@ -1,6 +1,7 @@
 const { getDB } = require('../../lib/db');
 const { requireAuth } = require('../../lib/auth');
 const { log } = require('../../lib/log');
+const { geocoder } = require('../../lib/geo');
 
 module.exports = async function handler(req, res) {
   const session = await requireAuth(req, res);
@@ -11,7 +12,7 @@ module.exports = async function handler(req, res) {
   const role = session.users.role;
 
   if (req.method === 'GET') {
-    const { data, error } = await db.from('stops').select('*, stop_photos(id, photo_url, created_at)').eq('id', id).single();
+    const { data, error } = await db.from('stops').select('*, stop_photos(id, photo_url, type, created_at)').eq('id', id).single();
     if (error || !data) return res.status(404).json({ error: 'Stop introuvable' });
 
     // Livreur : seulement les stops ATRIAL
@@ -40,6 +41,9 @@ module.exports = async function handler(req, res) {
         }
       }
       updates.statut = statut;
+      // Horodatage de la livraison : posé au passage en LIVRE, effacé si on
+      // revient en arrière. C'est lui que le script de retour relit.
+      updates.livre_le = statut === 'LIVRE' ? new Date().toISOString() : null;
     }
 
     if (ordre !== undefined && ['ADV', 'ADMIN'].includes(role)) {
@@ -95,11 +99,24 @@ module.exports = async function handler(req, res) {
       }
     }
 
+    // Coordonnées du client — ADV et ADMIN. L'ADV corrige l'adresse de
+    // livraison du stop créé automatiquement (il porte celle de facturation).
+    if (['ADV', 'ADMIN'].includes(role)) {
+      if (societe !== undefined && societe)   updates.societe   = societe;
+      if (telephone !== undefined)            updates.telephone = telephone || null;
+      if (adresse !== undefined && adresse) {
+        updates.adresse = adresse;
+        // Nouvelle adresse sans coordonnées fournies : on les recalcule
+        if (latitude === undefined && longitude === undefined) {
+          const geo = await geocoder(adresse);
+          updates.latitude  = geo ? geo.latitude  : null;
+          updates.longitude = geo ? geo.longitude : null;
+        }
+      }
+    }
+
     // Champs admin complets — ADMIN uniquement
     if (role === 'ADMIN') {
-      if (societe !== undefined)          updates.societe          = societe;
-      if (adresse !== undefined)          updates.adresse          = adresse;
-      if (telephone !== undefined)        updates.telephone        = telephone;
       if (numero_affaire !== undefined)   updates.numero_affaire   = numero_affaire;
       if (latitude !== undefined)         updates.latitude         = latitude;
       if (longitude !== undefined)        updates.longitude        = longitude;
@@ -112,7 +129,8 @@ module.exports = async function handler(req, res) {
 
     // Type produit et groupe livraison — ADV/ADMIN
     if (['ADV', 'ADMIN'].includes(role)) {
-      if (date_tournee !== undefined) updates.date_tournee = date_tournee;
+      // Date vide autorisée (stop automatique sans date prévue sur l'ARC)
+      if (date_tournee !== undefined) updates.date_tournee = date_tournee || null;
       if (type_produit !== undefined) {
         const VALID_TYPES = ['PVC', 'ALU', 'MIXTE'];
         if (type_produit !== null && !VALID_TYPES.includes(type_produit)) {
@@ -136,7 +154,7 @@ module.exports = async function handler(req, res) {
       .from('stops')
       .update(updates)
       .eq('id', id)
-      .select('*, stop_photos(id, photo_url, created_at)')
+      .select('*, stop_photos(id, photo_url, type, created_at)')
       .single();
 
     if (error) return res.status(500).json({ error: error.message });

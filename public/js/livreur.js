@@ -8,6 +8,7 @@ let photoGallery = [];  // photos du stop actif pour le modal
 let photoGalleryIndex = 0;
 let livreurTab = 'liste';   // 'liste' | 'route'
 let routeLoaded = false;
+let pendingDepotPhotos = [];   // {base64, type} — photos du dépôt pas encore envoyées
 
 const STATUS_LABEL = { A_LIVRER: 'À livrer', EN_COURS: 'En cours', LIVRE: 'Livré' };
 const STATUS_CLASS = { A_LIVRER: 'todo',     EN_COURS: 'now',      LIVRE: 'done' };
@@ -353,6 +354,10 @@ function openSheet(id) {
   // Phrase à trous « J'ai livré ___ colis »
   renderColisLivres(stop);
 
+  // Photo du dépôt (facultative)
+  pendingDepotPhotos = [];
+  renderPhotoDepot(stop);
+
   renderStatusActions(stop);
 
   document.getElementById('sheet-overlay').classList.add('open');
@@ -385,11 +390,128 @@ function closeSheet() {
   document.getElementById('sheet-overlay').classList.remove('open');
   document.getElementById('stop-sheet').classList.remove('open');
   activeStopId = null;
+  pendingDepotPhotos = [];
+}
+
+// Photos du magasin seulement (type colissage ou ancien enregistrement sans type)
+function photosColissage(stop) {
+  const toutes = stop.stop_photos || (stop.photo_url ? [{ photo_url: stop.photo_url }] : []);
+  return toutes.filter(p => !p.type || p.type === 'colissage');
+}
+
+// ── Photo du dépôt ────────────────────────────────────────────
+// Visible dès que la livraison est démarrée. Facultative : elle n'empêche
+// jamais de marquer livré. Envoyée juste après le passage en LIVRE, ou tout
+// de suite si le stop est déjà livré.
+function renderPhotoDepot(stop) {
+  const el = document.getElementById('sheet-photo-depot');
+  if (!stop || stop.statut === 'A_LIVRER') { el.style.display = 'none'; return; }
+
+  const existantes = (stop.stop_photos || []).filter(p => p.type === 'livraison');
+  const grid = document.getElementById('depot-photos-grid');
+  grid.innerHTML = existantes.map(p => `
+    <a href="${esc(p.photo_url)}" target="_blank" rel="noopener" style="display:block;width:64px;height:64px;border-radius:10px;overflow:hidden;border:1px solid var(--line)">
+      <img src="${esc(p.photo_url)}" alt="Photo du dépôt" style="width:100%;height:100%;object-fit:cover">
+    </a>`).join('')
+  + pendingDepotPhotos.map((p, i) => `
+    <div style="position:relative;width:64px;height:64px;border-radius:10px;overflow:hidden;border:2px solid var(--turquoise)">
+      <img src="${p.base64}" alt="Nouvelle photo" style="width:100%;height:100%;object-fit:cover">
+      <button type="button" onclick="removeDepotPhoto(${i})" title="Retirer"
+        style="position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(0,0,0,.6);color:#fff;font-size:13px;line-height:20px;cursor:pointer">×</button>
+    </div>`).join('');
+
+  const status = document.getElementById('depot-photo-status');
+  if (pendingDepotPhotos.length && stop.statut !== 'LIVRE') {
+    status.textContent = `${pendingDepotPhotos.length} photo(s) prête(s), envoyée(s) quand vous marquerez le stop livré.`;
+  } else {
+    status.textContent = '';
+  }
+  el.style.display = 'block';
+}
+
+function removeDepotPhoto(i) {
+  pendingDepotPhotos.splice(i, 1);
+  const stop = stops.find(s => s.id === activeStopId);
+  if (stop) renderPhotoDepot(stop);
+}
+
+// Réduit la photo (1280 px max, JPEG 82 %) : même réglage que le magasin.
+function compresserImage(file) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 1280;
+        let w = img.width, h = img.height;
+        if (w > MAX || h > MAX) {
+          if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+          else       { w = Math.round(w * MAX / h); h = MAX; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
+      };
+      img.onerror = () => resolve(null);
+      img.src = e.target.result;
+    };
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handleDepotPhoto(input) {
+  const file = input.files[0];
+  input.value = '';
+  if (!file) return;
+  const stop = stops.find(s => s.id === activeStopId);
+  if (!stop) return;
+
+  const base64 = await compresserImage(file);
+  if (!base64) { alert('Photo illisible. Réessayez.'); return; }
+  pendingDepotPhotos.push({ base64, type: 'image/jpeg' });
+
+  // Stop déjà livré : on envoie tout de suite
+  if (stop.statut === 'LIVRE') {
+    document.getElementById('depot-photo-status').textContent = 'Envoi…';
+    const echecs = await uploadDepotPhotos(stop.id);
+    if (echecs) alert(`${echecs} photo(s) non envoyée(s). Vérifiez le réseau et réessayez.`);
+  }
+  renderPhotoDepot(stops.find(s => s.id === activeStopId) || stop);
+}
+
+// Envoie les photos en attente. Renvoie le nombre d'échecs ; les photos
+// envoyées sont retirées de la file, les autres y restent.
+async function uploadDepotPhotos(stopId) {
+  let echecs = 0;
+  const restantes = [];
+  for (const photo of pendingDepotPhotos) {
+    try {
+      const r = await fetch('/api/stops/photo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stop_id: stopId, image: photo.base64, content_type: photo.type, type: 'livraison' }),
+      });
+      if (!r.ok) throw new Error();
+      const d = await r.json();
+      const stop = stops.find(s => s.id === stopId);
+      if (stop) {
+        if (!stop.stop_photos) stop.stop_photos = [];
+        stop.stop_photos.push({ photo_url: d.photo_url, type: 'livraison' });
+      }
+    } catch {
+      echecs++;
+      restantes.push(photo);
+    }
+  }
+  pendingDepotPhotos = restantes;
+  return echecs;
 }
 
 function renderMagasinInfo(stop) {
   const container = document.getElementById('sheet-magasin-info');
-  const photos = stop.stop_photos || (stop.photo_url ? [{ photo_url: stop.photo_url }] : []);
+  const photos = photosColissage(stop);
   const items = [];
 
   if (stop.nombre_colis) {
@@ -612,6 +734,15 @@ async function changeStatus(id, newStatut) {
     renderColisConfirm(updated);
     renderColisLivres(updated);
     renderStatusActions(updated);
+
+    // Photo du dépôt : envoyée APRÈS le passage en LIVRE, pour que la
+    // livraison soit enregistrée même si la photo échoue.
+    if (newStatut === 'LIVRE' && pendingDepotPhotos.length) {
+      document.getElementById('depot-photo-status').textContent = 'Envoi de la photo…';
+      const echecs = await uploadDepotPhotos(id);
+      if (echecs) alert(`Livraison enregistrée. ${echecs} photo(s) non envoyée(s) : rouvrez le stop pour réessayer.`);
+    }
+    renderPhotoDepot(stops[idx] || updated);
   } catch {
     alert('Erreur lors de la mise à jour. Réessayez.');
   }
@@ -637,7 +768,7 @@ function openPhotoGallery(id) {
   const stop = stops.find(s => s.id === id);
   if (!stop) return;
 
-  const photos = stop.stop_photos || (stop.photo_url ? [{ photo_url: stop.photo_url }] : []);
+  const photos = photosColissage(stop);
   if (!photos.length) return;
 
   photoGallery = photos;

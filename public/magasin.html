@@ -255,8 +255,12 @@
 
   <!-- ONGLETS DATE -->
   <div style="background:var(--bg);border-bottom:1px solid var(--line);display:flex;padding:0 16px;gap:0">
-    <button id="tab-today" onclick="switchTab('today')"
+    <button id="tab-aprep" onclick="switchTab('aprep')"
       style="flex:1;padding:12px 0;border:none;border-bottom:2px solid var(--turquoise);background:none;font:700 13px 'Inter',sans-serif;color:var(--turquoise);cursor:pointer">
+      À préparer
+    </button>
+    <button id="tab-today" onclick="switchTab('today')"
+      style="flex:1;padding:12px 0;border:none;border-bottom:2px solid transparent;background:none;font:600 13px 'Inter',sans-serif;color:var(--ink-mute);cursor:pointer">
       Aujourd'hui
     </button>
     <button id="tab-tomorrow" onclick="switchTab('tomorrow')"

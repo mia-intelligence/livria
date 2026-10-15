@@ -397,7 +397,24 @@
 
     <div id="assign-suggestion" style="background:#E6F6F6;color:#2E7F7F;border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:14px;display:none"></div>
     <div id="assign-error" style="background:var(--danger-soft);color:#A14444;border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:14px;display:none"></div>
+    <div id="assign-adresse-info" style="background:var(--warn-soft, #FFF4E0);color:#8A5A12;border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:14px;display:none">
+      Stop créé automatiquement à la fin de l'affaire : l'adresse ci-dessous est celle de <b>facturation</b>, lue sur l'ARC. Vérifiez l'adresse de livraison.
+    </div>
 
+    <div class="field">
+      <label>Adresse de livraison *</label>
+      <input type="text" id="assign-adresse" placeholder="12 rue des Artisans, 83170 Brignoles">
+    </div>
+    <div class="grid-2">
+      <div class="field">
+        <label>Téléphone</label>
+        <input type="text" id="assign-telephone" placeholder="06 12 34 56 78">
+      </div>
+      <div class="field">
+        <label>Date de tournée *</label>
+        <input type="date" id="assign-date">
+      </div>
+    </div>
     <div class="grid-2">
       <div class="field">
         <label>Tournée *</label>

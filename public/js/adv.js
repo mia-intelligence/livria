@@ -341,15 +341,24 @@ function affaireRowHTML(s, compact) {
     magasinLine = `<div style="font-size:12px;color:var(--ink-mute);margin-top:4px">⏳ En attente de préparation magasin</div>`;
   }
 
+  // Date de tournée : un stop créé automatiquement n'en a pas forcément.
+  const dateBadge = s.date_tournee
+    ? `<span style="color:var(--ink-soft)">📅 ${fmtDateFr(s.date_tournee)}</span>`
+    : `<span style="color:#8A5A12;font-weight:600">📅 Date à fixer</span>`;
+  const origineBadge = s.origine === 'auto_fini'
+    ? `<span title="Créé automatiquement quand l'affaire est passée « fini » dans le suivi d'affaires" style="font-size:10.5px;background:var(--turquoise-soft, #E6F6F6);color:var(--turquoise-dark, #2E7F7F);border-radius:99px;padding:1px 8px;font-weight:700">Affaire finie</span>`
+    : '';
+
   return `
     <div class="affaire-row">
       <div style="width:10px;height:10px;border-radius:50%;background:${TYPE_COLOR[societeLivraison] || '#9AA3AD'};flex-shrink:0;margin-top:4px"></div>
       <div class="affaire-info">
-        <div class="a-name">${esc(s.societe)}</div>
+        <div class="a-name">${esc(s.societe)} ${origineBadge}</div>
         <div class="a-addr">${esc(s.adresse)}</div>
         <div class="a-meta">
           ${s.numero_affaire ? `N° ${esc(s.numero_affaire)} · ` : ''}
           <span class="type-badge ${societeLivraison.toLowerCase()}">${TYPE_LABEL[societeLivraison] || societeLivraison}</span>
+          · ${dateBadge}
         </div>
         ${magasinLine}
       </div>
@@ -383,6 +392,13 @@ function openAssignModal(id) {
   document.getElementById('assign-tournee').value  = tourneeVal;
   document.getElementById('assign-vehicule').value = vehiculeVal;
 
+  // Adresse, téléphone, date : l'ADV les corrige ici (le stop automatique
+  // porte l'adresse de facturation de l'ARC et parfois aucune date).
+  document.getElementById('assign-adresse').value   = stop.adresse   || '';
+  document.getElementById('assign-telephone').value = stop.telephone || '';
+  document.getElementById('assign-date').value      = stop.date_tournee || new Date().toISOString().split('T')[0];
+  document.getElementById('assign-adresse-info').style.display = stop.origine === 'auto_fini' ? 'block' : 'none';
+
   // Afficher ou masquer le bandeau suggestion
   const badge = document.getElementById('assign-suggestion');
   if (suggestion && !stop.tournee) {
@@ -405,12 +421,25 @@ function closeAssignModal() {
 async function confirmAssign() {
   if (!pendingAssignId) return;
 
-  const tournee  = document.getElementById('assign-tournee').value;
-  const vehicule = document.getElementById('assign-vehicule').value;
-  const errEl    = document.getElementById('assign-error');
+  const tournee   = document.getElementById('assign-tournee').value;
+  const vehicule  = document.getElementById('assign-vehicule').value;
+  const adresse   = document.getElementById('assign-adresse').value.trim();
+  const telephone = document.getElementById('assign-telephone').value.trim();
+  const dateT     = document.getElementById('assign-date').value;
+  const errEl     = document.getElementById('assign-error');
 
   errEl.style.display = 'none';
 
+  if (!adresse) {
+    errEl.textContent = 'L\'adresse de livraison est obligatoire.';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (!dateT) {
+    errEl.textContent = 'La date de tournée est obligatoire.';
+    errEl.style.display = 'block';
+    return;
+  }
   if (!tournee) {
     errEl.textContent = 'La tournée est obligatoire.';
     errEl.style.display = 'block';
@@ -423,24 +452,29 @@ async function confirmAssign() {
   }
 
   try {
-    // Le stop prend la dernière place de SA journée, qui n'est pas
+    // Le stop prend la dernière place de la journée choisie, qui n'est pas
     // forcément aujourd'hui (la liste couvre toutes les dates).
     const stop  = stopsAPlanifier.find(s => s.id === pendingAssignId) || allStops.find(s => s.id === pendingAssignId);
     const today = new Date().toISOString().split('T')[0];
     let duJour  = allStops;
-    if (stop?.date_tournee && stop.date_tournee !== today) {
-      const r = await fetch(`/api/stops?date=${stop.date_tournee}`);
+    if (dateT !== today) {
+      const r = await fetch(`/api/stops?date=${dateT}`);
       if (!r.ok) throw new Error();
       duJour = await r.json();
     }
     const maxOrdre = duJour
-      .filter(s => s.ordre !== 99)
+      .filter(s => s.ordre !== 99 && s.id !== pendingAssignId)
       .reduce((m, s) => Math.max(m, s.ordre || 0), 0);
+
+    const body = { ordre: maxOrdre + 1, tournee, vehicule, date_tournee: dateT };
+    // N'envoyer l'adresse que si elle change : l'API la regéocode.
+    if (adresse !== (stop?.adresse || ''))     body.adresse   = adresse;
+    if (telephone !== (stop?.telephone || '')) body.telephone = telephone || null;
 
     const res = await fetch(`/api/stops/${pendingAssignId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ordre: maxOrdre + 1, tournee, vehicule })
+      body: JSON.stringify(body)
     });
 
     if (!res.ok) throw new Error();
@@ -603,9 +637,19 @@ function renderTournee() {
     // Colonne actions
     let actionsCell = '';
     if (s.statut === 'LIVRE') {
+      // Heure du clic « livré » et photo du dépôt prise par le livreur
+      const heure = s.livre_le
+        ? ' ' + new Date(s.livre_le).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+        : '';
+      const depot = (s.stop_photos || []).filter(p => p.type === 'livraison');
+      const depotLink = depot.length
+        ? `<a href="${esc(depot[depot.length - 1].photo_url)}" target="_blank" rel="noopener" title="Photo du dépôt prise par le livreur"
+             style="font-size:12px;color:var(--turquoise);font-weight:600;text-decoration:none;white-space:nowrap">📷 Dépôt${depot.length > 1 ? ' ×' + depot.length : ''}</a>`
+        : '';
       actionsCell = `
-        <div style="display:flex;align-items:center;gap:6px">
-          <span style="color:var(--success);font-weight:600;font-size:12px">✓ Livré</span>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span style="color:var(--success);font-weight:600;font-size:12px">✓ Livré${heure}</span>
+          ${depotLink}
           <button onclick="changeStopStatus('${s.id}','A_LIVRER')" title="Annuler la livraison"
             style="border:1px solid var(--line);background:var(--canvas);border-radius:8px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;color:var(--ink-mute);white-space:nowrap">
             ↩ Annuler

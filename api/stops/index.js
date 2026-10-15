@@ -1,5 +1,6 @@
 const { getDB } = require('../../lib/db');
 const { requireAuth } = require('../../lib/auth');
+const { geocoder } = require('../../lib/geo');
 
 // Colonnes de arc_commandes utiles au stop : identification, coordonnées de
 // facturation (adresse de livraison par défaut), règlement (le livreur
@@ -202,11 +203,26 @@ module.exports = async function handler(req, res) {
       return res.status(200).json(result);
     }
 
+    // Magasin, onglet « À préparer » : tout ce qui n'est pas encore validé,
+    // quelle que soit la date (un stop créé au statut « fini » n'a souvent
+    // pas encore de date de tournée). Sans date d'abord, puis par date.
+    if (req.query.magasin === 'a_preparer') {
+      if (!['MAGASIN', 'ADV', 'ADMIN'].includes(role)) return res.status(403).json({ error: 'Accès refusé' });
+      const { data, error } = await db
+        .from('stops').select('*, stop_photos(id, photo_url, type, created_at)')
+        .eq('magasin_valide', false)
+        .neq('statut', 'LIVRE')
+        .order('date_tournee', { ascending: true, nullsFirst: true })
+        .order('ordre', { ascending: true });
+      if (error) return res.status(500).json({ error: error.message });
+      return res.status(200).json(await attacheArc(db, data));
+    }
+
     // Plage de dates : ?from=YYYY-MM-DD&to=YYYY-MM-DD (vue semaine magasin)
     const { from: rFrom, to: rTo } = req.query;
     const date = req.query.date || new Date().toISOString().split('T')[0];
 
-    let query = db.from('stops').select('*, stop_photos(id, photo_url, created_at)');
+    let query = db.from('stops').select('*, stop_photos(id, photo_url, type, created_at)');
 
     if (rFrom && rTo) {
       query = query
@@ -218,8 +234,14 @@ module.exports = async function handler(req, res) {
       query = query.eq('date_tournee', date).order('ordre', { ascending: true });
     }
 
+    // Livreur : ses camions seulement, et uniquement ce que le magasin a
+    // validé ET que l'ADV a placé dans une tournée. Avant, tout stop du jour
+    // apparaissait, avec la mention « En attente de préparation magasin ».
     if (role === 'LIVREUR') {
-      query = query.eq('societe_livraison', 'ATRIAL');
+      query = query
+        .eq('societe_livraison', 'ATRIAL')
+        .eq('magasin_valide', true)
+        .not('tournee', 'is', null);
     }
 
     const { data, error } = await query;
@@ -292,21 +314,12 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: 'type_produit invalide' });
     }
 
-    // Géocodage automatique via TomTom
+    // Géocodage automatique via TomTom (non bloquant)
     let geoLat = latitude || null;
     let geoLng = longitude || null;
-    if (adresse && !geoLat && process.env.TOMTOM_API_KEY) {
-      try {
-        const query = encodeURIComponent(`${adresse}, France`);
-        const geoRes = await fetch(
-          `https://api.tomtom.com/search/2/geocode/${query}.json?key=${process.env.TOMTOM_API_KEY}&limit=1&countrySet=FR`
-        );
-        if (geoRes.ok) {
-          const geoData = await geoRes.json();
-          const pos = geoData?.results?.[0]?.position;
-          if (pos) { geoLat = pos.lat; geoLng = pos.lon; }
-        }
-      } catch { /* géocodage non-bloquant */ }
+    if (adresse && !geoLat) {
+      const geo = await geocoder(adresse);
+      if (geo) { geoLat = geo.latitude; geoLng = geo.longitude; }
     }
 
     const { data, error } = await db
@@ -330,8 +343,9 @@ module.exports = async function handler(req, res) {
         // Clé de la commande ARC choisie dans la liste (jamais saisie) : c'est
         // par elle que le script nocturne ramène l'adresse sur la commande.
         arc_reference:     arc_reference     || null,
+        origine:           role === 'LIVREUR' ? 'livreur' : 'adv',
       })
-      .select('*, stop_photos(id, photo_url, created_at)')
+      .select('*, stop_photos(id, photo_url, type, created_at)')
       .single();
 
     if (error) return res.status(500).json({ error: error.message });

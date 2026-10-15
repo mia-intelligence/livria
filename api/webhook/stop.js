@@ -28,10 +28,11 @@ module.exports = async function handler(req, res) {
       latitude: typeof latitude === 'number' ? latitude : null,
       longitude: typeof longitude === 'number' ? longitude : null,
       numero_affaire: numero_affaire || null,
-      type,
+      societe_livraison: type,
       statut: 'A_LIVRER',
       ordre: 99,
       date_tournee: today,
+      origine: 'webhook',
     })
     .select()
     .single();
