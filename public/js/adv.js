@@ -1,7 +1,19 @@
 /* ── LIVRIAL — Vue ADV ────────────────────────────────────────── */
 
 let allStops = [];
-let activeFilter = 'ALL';
+let activeFilter = 'ALL';     // mode de sortie (chips ATRIAL / Enlèvement / Transporteur)
+let activeStatut = 'ALL';     // statut du stop (chips À livrer / En cours / Livré)
+let tourneeSearch = '';       // recherche dans la tournée du jour
+let affairesSearch = '';      // recherche dans « Affaires à planifier »
+
+// Comparaison sans accents ni majuscules
+function normalise(t) {
+  return String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+function correspond(q, ...champs) {
+  const n = normalise(q).trim();
+  return !n || normalise(champs.join(' ')).includes(n);
+}
 let pendingRowChanges = {}; // { stopId: { field: value, ... } }
 let advMap = null;
 let pendingAssignId = null;
@@ -244,18 +256,32 @@ function renderAffaires() {
     ? `Toutes les commandes ARC · <a style="cursor:pointer;color:var(--turquoise);font-weight:600" onclick="basculerArcTout(false)">Revenir aux ${arcJours} derniers jours</a>`
     : `ARC des ${arcJours} derniers jours · <a style="cursor:pointer;color:var(--turquoise);font-weight:600" onclick="basculerArcTout(true)">Voir aussi les plus anciennes</a>`;
 
-  let html = titre(arcSuivi ? 'Affaires terminées, prêtes à livrer' : 'Commandes ARC sans stop', arcAPlanifier.length)
-    + `<div class="muted" style="font-size:12px;margin-bottom:6px">${perimetre}</div>`;
-  html += arcAPlanifier.length
-    ? arcAPlanifier.map((c, i) => arcRowHTML(c, i, false)).join('')
-    : `<p style="color:var(--ink-mute);font-size:13px;text-align:center;padding:16px 0">${arcSuivi ? 'Aucune affaire terminée en attente de stop ✓' : 'Toutes les commandes ARC ont un stop ✓'}</p>`;
+  // Recherche : les index d'origine sont conservés pour les boutons (masquerArc / creerStopDepuisArc)
+  const arcs  = arcAPlanifier.map((c, i) => [c, i])
+    .filter(([c]) => correspond(affairesSearch, c.societe, c.numero_document, c.reference, c.reference_complete, c.ville));
+  const stopsF = stopsAPlanifier
+    .filter(s => correspond(affairesSearch, s.societe, s.numero_affaire, s.reference_client, s.adresse));
+  const cherche = normalise(affairesSearch).trim() !== '';
+  const info = document.getElementById('aff-search-info');
+  if (info) info.textContent = cherche ? `${arcs.length + stopsF.length} résultat(s)` : '';
 
-  html += '<div style="height:18px"></div>' + titre('Stops à placer dans une tournée', stopsAPlanifier.length);
-  html += stopsAPlanifier.length
-    ? stopsAPlanifier.map(s => affaireRowHTML(s, false)).join('')
-    : '<p style="color:var(--ink-mute);font-size:13px;text-align:center;padding:16px 0">Aucun stop en attente — tous ont été planifiés ✓</p>';
+  let html = titre(arcSuivi ? 'Affaires terminées, prêtes à livrer' : 'Commandes ARC sans stop', cherche ? `${arcs.length} / ${arcAPlanifier.length}` : arcAPlanifier.length)
+    + `<div class="muted" style="font-size:12px;margin-bottom:6px">${perimetre}</div>`;
+  html += arcs.length
+    ? arcs.map(([c, i]) => arcRowHTML(c, i, false)).join('')
+    : `<p style="color:var(--ink-mute);font-size:13px;text-align:center;padding:16px 0">${cherche ? 'Aucune commande ne correspond' : (arcSuivi ? 'Aucune affaire terminée en attente de stop ✓' : 'Toutes les commandes ARC ont un stop ✓')}</p>`;
+
+  html += '<div style="height:18px"></div>' + titre('Stops à placer dans une tournée', cherche ? `${stopsF.length} / ${stopsAPlanifier.length}` : stopsAPlanifier.length);
+  html += stopsF.length
+    ? stopsF.map(s => affaireRowHTML(s, false)).join('')
+    : `<p style="color:var(--ink-mute);font-size:13px;text-align:center;padding:16px 0">${cherche ? 'Aucun stop ne correspond' : 'Aucun stop en attente — tous ont été planifiés ✓'}</p>`;
 
   el.innerHTML = html;
+}
+
+function onAffairesSearch(v) {
+  affairesSearch = v;
+  renderAffaires();
 }
 
 function arcRowHTML(c, i, compact) {
@@ -567,17 +593,31 @@ async function confirmReporter() {
 function setFilter(f) {
   activeFilter = f;
 
-  document.querySelectorAll('.filter-bar .chip').forEach(c => {
+  document.querySelectorAll('.filter-bar .chip[data-filter]').forEach(c => {
     c.classList.toggle('active', c.dataset.filter === f);
   });
 
   renderTournee();
 }
 
+function setStatutFilter(f) {
+  activeStatut = f;
+  document.querySelectorAll('.filter-bar .chip[data-statut]').forEach(c => {
+    c.classList.toggle('active', c.dataset.statut === f);
+  });
+  renderTournee();
+}
+
+function onTourneeSearch(v) {
+  tourneeSearch = v;
+  renderTournee();
+}
+
 function renderTournee() {
-  const filtered = activeFilter === 'ALL'
-    ? allStops
-    : allStops.filter(s => s.societe_livraison === activeFilter);
+  const filtered = allStops.filter(s =>
+    (activeFilter === 'ALL' || s.societe_livraison === activeFilter)
+    && (activeStatut === 'ALL' || s.statut === activeStatut)
+    && correspond(tourneeSearch, s.societe, s.numero_affaire, s.reference_client, s.adresse));
 
   const total = allStops.length;
   const done = allStops.filter(s => s.statut === 'LIVRE').length;

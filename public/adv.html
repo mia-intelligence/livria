@@ -213,6 +213,12 @@
             <div class="lead">Commandes ARC qui n'ont pas encore de stop, et stops pas encore placés dans une tournée</div>
           </div>
         </div>
+        <div class="filter-bar">
+          <input type="search" id="aff-search" placeholder="Rechercher une société ou un n° d'affaire" autocomplete="off"
+            oninput="onAffairesSearch(this.value)"
+            style="height:38px;min-width:300px;flex:1;max-width:460px;border-radius:10px;border:1px solid var(--line);padding:0 14px;font:inherit;font-size:13.5px;color:var(--ink);background:var(--bg);outline:none">
+          <span class="muted" style="font-size:12px" id="aff-search-info"></span>
+        </div>
         <div class="card">
           <div id="affaires-list">
             <div style="color:var(--ink-mute);font-size:13px;text-align:center;padding:32px 0">Chargement…</div>
@@ -257,6 +263,14 @@
             <span style="width:8px;height:8px;border-radius:50%;background:var(--type-transporteur);display:inline-block"></span>
             Transporteur
           </button>
+          <span style="width:1px;height:22px;background:var(--line);margin:0 4px"></span>
+          <button class="chip active" data-statut="ALL"      onclick="setStatutFilter('ALL')">Tous statuts</button>
+          <button class="chip"        data-statut="A_LIVRER" onclick="setStatutFilter('A_LIVRER')">À livrer</button>
+          <button class="chip"        data-statut="EN_COURS" onclick="setStatutFilter('EN_COURS')">En cours</button>
+          <button class="chip"        data-statut="LIVRE"    onclick="setStatutFilter('LIVRE')">Livré</button>
+          <input type="search" id="tournee-search" placeholder="Société ou n° d'affaire" autocomplete="off"
+            oninput="onTourneeSearch(this.value)"
+            style="height:34px;min-width:220px;border-radius:99px;border:1px solid var(--line);padding:0 14px;font:inherit;font-size:12.5px;color:var(--ink);background:var(--bg);outline:none;margin-left:auto">
         </div>
 
         <div class="card" style="padding:0">

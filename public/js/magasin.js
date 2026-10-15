@@ -11,6 +11,36 @@ let existingPhotos = [];  // {id, photo_url} — photos déjà en DB
 let activeTab = 'aprep';       // 'aprep' | 'today' | 'tomorrow' | 'week'
 let weekAnchor = startOfWeek(new Date()); // lundi de la semaine affichée
 
+// Recherche (société, n° d'affaire, référence client, adresse) et filtre par
+// état de préparation. Appliqués à l'affichage seulement : les compteurs
+// restent ceux de l'onglet entier.
+let magSearch = '';
+let magFilter = 'ALL';   // 'ALL' | 'a-preparer' | 'en-cours' | 'pret'
+
+function normalise(t) {
+  return String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+function stopsVisibles() {
+  const q = normalise(magSearch).trim();
+  return stops.filter(s => {
+    if (magFilter !== 'ALL' && getMagasinStatus(s) !== magFilter) return false;
+    if (!q) return true;
+    return normalise([s.societe, s.numero_affaire, s.reference_client, s.adresse].join(' ')).includes(q);
+  });
+}
+
+function onMagSearch(v) {
+  magSearch = v;
+  if (activeTab === 'week') renderWeek(); else renderList();
+}
+
+function setMagFilter(f) {
+  magFilter = f;
+  document.querySelectorAll('#mag-filtres .mag-chip').forEach(c => c.classList.toggle('active', c.dataset.f === f));
+  if (activeTab === 'week') renderWeek(); else renderList();
+}
+
 const DAYS_FR   = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 const MONTHS_FR = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
 
@@ -147,7 +177,7 @@ function renderWeek() {
 
   // Regrouper par date
   const byDate = {};
-  for (const s of stops) {
+  for (const s of stopsVisibles()) {
     if (!s.date_tournee) continue;
     (byDate[s.date_tournee] = byDate[s.date_tournee] || []).push(s);
   }
@@ -234,7 +264,13 @@ function renderList() {
     return;
   }
 
-  container.innerHTML = stops.map((s, i) => {
+  const liste = stopsVisibles();
+  if (!liste.length) {
+    container.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--ink-mute);">Aucun stop ne correspond à la recherche ou au filtre.</div>';
+    return;
+  }
+
+  container.innerHTML = liste.map((s, i) => {
     const ms  = getMagasinStatus(s);
     // Onglet « À préparer » : la position dans la tournée n'a pas de sens
     // (le stop n'est souvent pas encore placé) ; on numérote la liste.
