@@ -43,6 +43,8 @@ CREATE TABLE IF NOT EXISTS stops (
   -- Lieu de livraison (V6, migration 20261022_planification_auto.sql) :
   -- chantier du client ou dépôt du client. Choisi par l'ADV, affiché au livreur.
   lieu_livraison     TEXT        NOT NULL DEFAULT 'CHANTIER' CHECK (lieu_livraison IN ('CHANTIER','DEPOT')),
+  -- Vigilance adresse (V6) : FALSE sur un stop automatique tant que l'ADV n'a pas confirmé l'adresse
+  adresse_verifiee   BOOLEAN     NOT NULL DEFAULT TRUE,
   -- Champs préparation magasin (ajoutés V2)
   nombre_colis       INTEGER,
   emplacement        TEXT,

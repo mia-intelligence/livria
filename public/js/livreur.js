@@ -273,9 +273,12 @@ function renderStopsList() {
       ? `<div style="margin-top:8px;display:flex;flex-wrap:wrap;align-items:center;gap:6px;">${warning}${extras.join('')}</div>`
       : '';
 
-    // Lieu de livraison (chantier / dépôt) et véhicule, fixés par l'ADV
+    // Lieu de livraison (chantier / dépôt) et véhicule, fixés par l'ADV.
+    // Adresse pas encore confirmée par l'ADV : le livreur appelle avant de partir.
+    const adresseWarn = s.adresse_verifiee === false
+      ? `<span style="font-size:11px;font-weight:700;color:#8A5A12;background:var(--warn-soft);border-radius:6px;padding:2px 7px">⚠ Adresse à confirmer</span>` : '';
     const livraisonLine = `<div style="margin-top:5px;display:flex;flex-wrap:wrap;align-items:center;gap:6px">
-      ${lieuBadge(s)}
+      ${lieuBadge(s)}${adresseWarn}
       ${s.vehicule ? `<span style="font-size:11.5px;color:var(--ink-mute)">${VEHICULE_LABEL[s.vehicule] || esc(s.vehicule)}</span>` : ''}
     </div>`;
 
@@ -354,7 +357,10 @@ function openSheet(id) {
   ].filter(Boolean).join(' · ');
   document.getElementById('sheet-lieu').innerHTML =
     `${lieuBadge(stop)}${stop.vehicule ? ` <span style="font-size:12.5px;color:var(--ink-soft)">${VEHICULE_LABEL[stop.vehicule] || esc(stop.vehicule)}</span>` : ''}`;
-  document.getElementById('sheet-adresse').textContent = stop.adresse;
+  document.getElementById('sheet-adresse').innerHTML = esc(stop.adresse)
+    + (stop.adresse_verifiee === false
+        ? '<div style="margin-top:4px;font-size:12px;font-weight:600;color:#8A5A12">⚠ Adresse reprise de la commande, non confirmée par l\'ADV : vérifiez avec le client avant de partir.</div>'
+        : '');
   document.getElementById('sheet-tel').innerHTML = stop.telephone
     ? `<a href="tel:${esc(stop.telephone)}">${esc(stop.telephone)}</a>`
     : '—';

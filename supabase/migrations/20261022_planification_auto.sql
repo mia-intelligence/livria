@@ -9,9 +9,12 @@
 --      → NOUVEAU : véhicule « PL » d'office, l'ADV le change au besoin.
 --      → NOUVEAU : lieu de livraison « chantier » ou « dépôt », choisi par
 --        l'ADV, affiché au livreur. Chantier par défaut.
+--      → NOUVEAU : le stop automatique part avec l'adresse de facturation de
+--        l'ARC ; il porte « adresse à vérifier » jusqu'à ce que l'ADV la
+--        confirme (fenêtre « Modifier » ou bouton « Adresse OK »).
 --
 --  Ce fichier :
---    1. stops.lieu_livraison (CHANTIER | DEPOT)
+--    1. stops.lieu_livraison (CHANTIER | DEPOT), stops.adresse_verifiee
 --    2. fonction tournee_depuis_cp(code_postal) — règles ADV en SQL
 --    3. creer_stop_depuis_arc() : tournée, véhicule PL, ordre dans la journée
 --    4. rattrapage : stops automatiques déjà créés mais pas encore planifiés
@@ -30,6 +33,18 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 COMMENT ON COLUMN stops.lieu_livraison IS 'CHANTIER = livraison sur le chantier du client ; DEPOT = livraison au dépôt du client. Choisi par l''ADV, affiché au livreur.';
+
+-- Vigilance adresse : faux sur un stop automatique (adresse de facturation
+-- de l'ARC) tant que l'ADV ne l'a pas confirmée. Vrai sur un stop saisi par l'ADV.
+ALTER TABLE stops
+  ADD COLUMN IF NOT EXISTS adresse_verifiee BOOLEAN NOT NULL DEFAULT TRUE;
+
+COMMENT ON COLUMN stops.adresse_verifiee IS 'FALSE = adresse reprise de l''ARC (facturation), à vérifier par l''ADV avant la tournée. Passe à TRUE quand l''ADV enregistre le stop ou clique « Adresse OK ».';
+
+-- Rattrapage : les stops automatiques jamais passés par « Planifier »
+-- (ordre 99) n'ont pas eu leur adresse relue par l'ADV.
+UPDATE stops SET adresse_verifiee = FALSE
+WHERE origine = 'auto_fini' AND statut <> 'LIVRE' AND ordre = 99;
 
 -- 2. Tournée déduite du code postal (même table de règles que adv.js, TOURNEE_RULES)
 --    06xxx            → MARDI T06-T83EST
@@ -115,7 +130,7 @@ BEGIN
 
   INSERT INTO stops (
     societe, adresse, telephone, numero_affaire,
-    societe_livraison, tournee, vehicule, lieu_livraison,
+    societe_livraison, tournee, vehicule, lieu_livraison, adresse_verifiee,
     statut, ordre, date_tournee,
     type_produit, reference_client, arc_reference, origine
   ) VALUES (
@@ -127,6 +142,7 @@ BEGIN
     v_tournee,
     'PL',
     'CHANTIER',
+    FALSE,
     'A_LIVRER', v_ordre, c.date_livraison_prevue,
     CASE WHEN c.gamme IN ('PVC', 'ALU', 'MIXTE') THEN c.gamme ELSE NULL END,
     nullif(trim(coalesce(c.reference, '')), ''),
@@ -172,7 +188,7 @@ BEGIN
 END $$;
 
 -- Contrôle :
--- SELECT societe, date_tournee, tournee, vehicule, ordre, lieu_livraison
+-- SELECT societe, date_tournee, tournee, vehicule, ordre, lieu_livraison, adresse_verifiee
 --   FROM stops WHERE origine = 'auto_fini' ORDER BY date_tournee, ordre;
 
 NOTIFY pgrst, 'reload schema';

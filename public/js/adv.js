@@ -73,6 +73,39 @@ function lieuBadge(s) {
   const lieu = s.lieu_livraison || 'CHANTIER';
   return `<span class="lieu-badge ${lieu.toLowerCase()}">${LIEU_LABEL[lieu] || esc(lieu)}</span>`;
 }
+// Vigilance adresse : stop automatique dont l'adresse (facturation, lue sur
+// l'ARC) n'a pas encore été confirmée par l'ADV.
+function adresseAVerifier(s) { return s.adresse_verifiee === false && s.statut !== 'LIVRE'; }
+function adresseBadge(s, avecBouton) {
+  if (!adresseAVerifier(s)) return '';
+  return `<div style="display:inline-flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap">
+    <span title="Adresse de facturation reprise de l'ARC : vérifiez l'adresse de livraison" style="font-size:11px;font-weight:700;color:#8A5A12;background:var(--warn-soft, #FFF4E0);border-radius:6px;padding:2px 7px;white-space:nowrap">⚠ Adresse à vérifier</span>
+    ${avecBouton ? `<button onclick="confirmerAdresse('${s.id}')" title="L'adresse est correcte, sans modification"
+      style="border:1px solid var(--line);background:var(--canvas);border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;cursor:pointer;color:var(--ink-soft);white-space:nowrap">✓ Adresse OK</button>` : ''}
+  </div>`;
+}
+
+// « Adresse OK » : l'ADV confirme l'adresse sans la modifier
+async function confirmerAdresse(id) {
+  try {
+    const res = await fetch(`/api/stops/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adresse_verifiee: true }),
+    });
+    if (!res.ok) throw new Error();
+    const updated = await res.json();
+    const maj = s => (s.id === id ? { ...s, adresse_verifiee: true, stop_photos: s.stop_photos || updated.stop_photos || [] } : s);
+    allStops        = allStops.map(maj);
+    stopsAPlanifier = stopsAPlanifier.map(maj);
+    renderDashboard();
+    renderAffaires();
+    renderTournee();
+  } catch {
+    alert('Impossible de confirmer l\'adresse. Réessayez.');
+  }
+}
+
 function lireRadio(name, defaut) {
   return document.querySelector(`input[name="${name}"]:checked`)?.value || defaut;
 }
@@ -212,8 +245,10 @@ function renderDashboard() {
 
   document.getElementById('badge-affaires').textContent = unplanned;
 
+  const aVerifier = [...today, ...stopsAPlanifier].filter(adresseAVerifier).length;
   document.getElementById('dash-lead').textContent =
-    `${today.length} stop${today.length > 1 ? 's' : ''} aujourd'hui · ${done} livré${done > 1 ? 's' : ''} · ${pending} en attente`;
+    `${today.length} stop${today.length > 1 ? 's' : ''} aujourd'hui · ${done} livré${done > 1 ? 's' : ''} · ${pending} en attente`
+    + (aVerifier ? ` · ⚠ ${aVerifier} adresse${aVerifier > 1 ? 's' : ''} à vérifier` : '');
 
   const preview = [...today].slice(0, 5);
   const previewEl = document.getElementById('dash-stops-preview');
@@ -230,6 +265,7 @@ function renderDashboard() {
           <div style="flex:1;min-width:0">
             <div style="font-weight:600;font-size:13px">${esc(s.societe)}</div>
             <div style="font-size:11.5px;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.adresse)}</div>
+            ${adresseBadge(s, false)}
           </div>
           <span class="pill ${STATUS_CLASS[s.statut] || 'todo'}">${STATUS_LABEL[s.statut] || s.statut}</span>
         </div>
@@ -394,6 +430,7 @@ function affaireRowHTML(s, compact) {
       <div class="affaire-info">
         <div class="a-name">${esc(s.societe)} ${origineBadge}</div>
         <div class="a-addr">${esc(s.adresse)}</div>
+        ${adresseBadge(s, false)}
         <div class="a-meta">
           ${s.numero_affaire ? `N° ${esc(s.numero_affaire)} · ` : ''}
           ${s.reference_client ? `Réf. <b>${esc(s.reference_client)}</b> · ` : ''}
@@ -516,7 +553,7 @@ async function confirmAssign() {
 
     // Un stop déjà placé ce jour-là garde sa position dans la tournée
     const gardeOrdre = stop && stop.ordre !== 99 && stop.date_tournee === dateT;
-    const body = { ordre: gardeOrdre ? stop.ordre : maxOrdre + 1, tournee, vehicule, lieu_livraison: lieu, date_tournee: dateT };
+    const body = { ordre: gardeOrdre ? stop.ordre : maxOrdre + 1, tournee, vehicule, lieu_livraison: lieu, date_tournee: dateT, adresse_verifiee: true };
     // N'envoyer l'adresse que si elle change : l'API la regéocode.
     if (adresse !== (stop?.adresse || ''))     body.adresse   = adresse;
     if (telephone !== (stop?.telephone || '')) body.telephone = telephone || null;
@@ -763,7 +800,7 @@ function renderTournee() {
       <tr>
         <td class="strong">${s.ordre ?? '—'}</td>
         <td class="strong">${esc(s.societe)}</td>
-        <td class="muted" style="max-width:180px;white-space:normal;word-break:break-word;line-height:1.4">${esc(s.adresse || '—').replace(/,\s*(\d{5})/g, ',<br>$1')}</td>
+        <td class="muted" style="max-width:180px;white-space:normal;word-break:break-word;line-height:1.4">${esc(s.adresse || '—').replace(/,\s*(\d{5})/g, ',<br>$1')}${adresseBadge(s, true)}</td>
         <td class="muted">${s.numero_affaire ? esc(s.numero_affaire) : '—'}${s.reference_client ? `<div style="font-size:11px;font-weight:700;color:var(--turquoise-dark, #2E7F7F)">${esc(s.reference_client)}</div>` : ''}</td>
         <td><span class="type-badge ${societeLivraison.toLowerCase()}">${TYPE_LABEL[societeLivraison] || societeLivraison}</span></td>
         <td class="muted" style="white-space:nowrap">

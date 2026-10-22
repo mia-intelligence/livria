@@ -23,7 +23,7 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === 'PATCH') {
-    const { statut, ordre, tournee, vehicule, lieu_livraison, societe_livraison, nombre_colis, emplacement, photo_url, magasin_valide, magasin_valide_at, commentaire_magasin, livreur_colis_confirme, colis_livres, type_produit, groupe_livraison, reference_client, arc_reference, date_tournee, societe, adresse, telephone, numero_affaire, latitude, longitude } = req.body;
+    const { statut, ordre, tournee, vehicule, lieu_livraison, adresse_verifiee, societe_livraison, nombre_colis, emplacement, photo_url, magasin_valide, magasin_valide_at, commentaire_magasin, livreur_colis_confirme, colis_livres, type_produit, groupe_livraison, reference_client, arc_reference, date_tournee, societe, adresse, telephone, numero_affaire, latitude, longitude } = req.body;
     const VALID_STATUTS  = ['A_LIVRER', 'EN_COURS', 'LIVRE'];
     const VALID_TOURNEES = ['ENLEVEMENT','TOURNEE LUNDI','MARDI T06-T83EST','MERCREDI T13','TOURNEE JEUDI','VENDREDI T83 OUEST','LIVRAISON CHANTIER','TRANSPORTEUR'];
     const VALID_VEHICULES = ['PL', 'VL'];
@@ -112,8 +112,11 @@ module.exports = async function handler(req, res) {
     if (['ADV', 'ADMIN'].includes(role)) {
       if (societe !== undefined && societe)   updates.societe   = societe;
       if (telephone !== undefined)            updates.telephone = telephone || null;
+      // Vigilance adresse : l'ADV confirme (« Adresse OK ») ou corrige
+      if (adresse_verifiee !== undefined) updates.adresse_verifiee = !!adresse_verifiee;
       if (adresse !== undefined && adresse) {
         updates.adresse = adresse;
+        updates.adresse_verifiee = true;
         // Nouvelle adresse sans coordonnées fournies : on les recalcule
         if (latitude === undefined && longitude === undefined) {
           const geo = await geocoder(adresse);
