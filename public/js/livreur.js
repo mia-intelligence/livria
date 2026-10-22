@@ -6,7 +6,8 @@ let markerById = {};
 let activeStopId = null;
 let photoGallery = [];  // photos du stop actif pour le modal
 let photoGalleryIndex = 0;
-let livreurTab = 'liste';   // 'liste' | 'route'
+let livreurTab = 'liste';   // 'liste' | 'demain' | 'route'
+let stopsDemain = null;     // stops de la prochaine tournée (chargés à la demande)
 let routeLoaded = false;
 let pendingDepotPhotos = [];   // {base64, type} — photos du dépôt pas encore envoyées
 
@@ -25,6 +26,7 @@ function lieuBadge(s) {
 async function init() {
   await checkAuth();
   setTodayDate();
+  document.getElementById('lv-tab-demain').textContent = libelleDemain();
   await loadStops();
 }
 
@@ -46,6 +48,45 @@ function setTodayDate() {
   });
 }
 
+// ── Prochaine tournée ─────────────────────────────────────────
+// Le lendemain ouvré : le vendredi et le samedi renvoient le lundi.
+function prochaineTournee() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+  return d;
+}
+function fmtIso(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function libelleDemain() {
+  const d = prochaineTournee();
+  const demain = new Date(); demain.setDate(demain.getDate() + 1);
+  if (d.getDate() === demain.getDate() && d.getMonth() === demain.getMonth()) return 'Demain';
+  const j = d.toLocaleDateString('fr-FR', { weekday: 'long' });
+  return j.charAt(0).toUpperCase() + j.slice(1);
+}
+// Un stop peut venir de la tournée du jour ou de la prochaine
+function trouverStop(id) {
+  return stops.find(s => s.id === id) || (stopsDemain || []).find(s => s.id === id);
+}
+function estDemain(id) {
+  return !stops.some(s => s.id === id) && (stopsDemain || []).some(s => s.id === id);
+}
+
+async function loadStopsDemain() {
+  const container = document.getElementById('stops-list');
+  container.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--ink-mute);">Chargement…</div>';
+  try {
+    const res = await fetch(`/api/stops?date=${fmtIso(prochaineTournee())}`);
+    if (res.status === 401) { window.location.href = '/'; return; }
+    stopsDemain = await res.json();
+    renderStopsList();
+  } catch {
+    container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--danger)">Erreur de chargement. Actualisez la page.</div>';
+  }
+}
+
 // ── Load stops ────────────────────────────────────────────────
 async function loadStops() {
   try {
@@ -64,14 +105,28 @@ async function loadStops() {
 // ── Onglets Liste / Itinéraire ────────────────────────────────
 function switchLivreurTab(tab) {
   livreurTab = tab;
-  const isRoute = tab === 'route';
+  const isRoute  = tab === 'route';
+  const isDemain = tab === 'demain';
 
-  document.getElementById('lv-tab-liste').classList.toggle('active', !isRoute);
+  document.getElementById('lv-tab-liste').classList.toggle('active', tab === 'liste');
+  document.getElementById('lv-tab-demain').classList.toggle('active', isDemain);
   document.getElementById('lv-tab-route').classList.toggle('active', isRoute);
   document.getElementById('stops-list').style.display = isRoute ? 'none' : 'flex';
   document.getElementById('route-panel').classList.toggle('active', isRoute);
 
+  // Prochaine tournée : consultation seulement, l'optimisation reste sur aujourd'hui
+  const bandeau = document.getElementById('demain-bandeau');
+  bandeau.style.display = isDemain ? 'block' : 'none';
+  if (isDemain) {
+    const d = prochaineTournee().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    bandeau.textContent = `📅 Tournée du ${d} · consultation seulement, les actions s'ouvrent le jour même`;
+  }
+  const fab = document.getElementById('btn-optimize');
+  if (fab) fab.style.display = isDemain ? 'none' : '';
+
   if (isRoute && !routeLoaded) loadRoute();
+  if (isDemain) { if (stopsDemain === null) loadStopsDemain(); else renderStopsList(); }
+  if (tab === 'liste') renderStopsList();
 }
 
 // ── Feuille de route turn-by-turn ─────────────────────────────
@@ -207,22 +262,26 @@ function updateSummary() {
 // ── Render stop list ──────────────────────────────────────────
 function renderStopsList() {
   const container = document.getElementById('stops-list');
+  const demain = livreurTab === 'demain';
+  const liste  = demain ? (stopsDemain || []) : stops;
 
-  if (!stops.length) {
-    container.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--ink-mute);">Aucun stop prévu aujourd\'hui.</div>';
+  if (!liste.length) {
+    container.innerHTML = demain
+      ? '<div style="text-align:center;padding:40px 20px;color:var(--ink-mute);">Rien de prêt pour la prochaine tournée.<br><span style="font-size:12px">Les stops apparaissent une fois validés par le magasin et placés en tournée par l\'ADV.</span></div>'
+      : '<div style="text-align:center;padding:40px 20px;color:var(--ink-mute);">Aucun stop prévu aujourd\'hui.</div>';
     return;
   }
 
   // Grouper visuellement : reference_client en priorité, sinon societe
   const groupCount = {};
-  stops.forEach(s => {
+  liste.forEach(s => {
     const key = s.reference_client
       ? `ref:${s.reference_client.trim().toLowerCase()}`
       : `soc:${(s.societe || '').trim().toLowerCase()}`;
     groupCount[key] = (groupCount[key] || 0) + 1;
   });
 
-  container.innerHTML = stops.map((s, i) => {
+  container.innerHTML = liste.map((s, i) => {
     const sc  = STATUS_CLASS[s.statut] || 'todo';
     const lbl = STATUS_LABEL[s.statut] || s.statut;
     const num = s.ordre ?? (i + 1);
@@ -346,9 +405,10 @@ function renderMap(stopsData) {
 
 // ── Stop detail sheet ─────────────────────────────────────────
 function openSheet(id) {
-  const stop = stops.find(s => s.id === id);
+  const stop = trouverStop(id);
   if (!stop) return;
   activeStopId = id;
+  const lectureSeule = estDemain(id);
 
   document.getElementById('sheet-title').textContent   = stop.societe;
   document.getElementById('sheet-affaire').textContent = [
@@ -375,17 +435,28 @@ function openSheet(id) {
   // Info magasin
   renderMagasinInfo(stop);
 
-  // Checkbox colis
-  renderColisConfirm(stop);
+  if (lectureSeule) {
+    // Prochaine tournée : on consulte, on n'agit pas. Rien ne doit pouvoir
+    // passer un stop en « livré » la veille.
+    ['sheet-colis-confirm', 'sheet-colis-livres', 'sheet-photo-depot'].forEach(i => {
+      document.getElementById(i).style.display = 'none';
+    });
+    const d = new Date(stop.date_tournee + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    document.getElementById('status-actions').innerHTML =
+      `<div style="text-align:center;font-size:13px;color:var(--ink-mute);padding:10px 0">📅 Livraison prévue le ${d}.<br>Les actions seront disponibles ce jour-là.</div>`;
+  } else {
+    // Checkbox colis
+    renderColisConfirm(stop);
 
-  // Phrase à trous « J'ai livré ___ colis »
-  renderColisLivres(stop);
+    // Phrase à trous « J'ai livré ___ colis »
+    renderColisLivres(stop);
 
-  // Photo du dépôt (facultative)
-  pendingDepotPhotos = [];
-  renderPhotoDepot(stop);
+    // Photo du dépôt (facultative)
+    pendingDepotPhotos = [];
+    renderPhotoDepot(stop);
 
-  renderStatusActions(stop);
+    renderStatusActions(stop);
+  }
 
   document.getElementById('sheet-overlay').classList.add('open');
   document.getElementById('stop-sheet').classList.add('open');
@@ -792,7 +863,7 @@ function updateMapMarker(stop) {
 
 // ── Galerie photos ────────────────────────────────────────────
 function openPhotoGallery(id) {
-  const stop = stops.find(s => s.id === id);
+  const stop = trouverStop(id);
   if (!stop) return;
 
   const photos = photosColissage(stop);
