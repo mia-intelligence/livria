@@ -67,6 +67,19 @@ const TYPE_LABEL = {
   TRANSPORTEUR: 'Transporteur'
 };
 
+// Lieu de livraison choisi par l'ADV, affiché au livreur. Chantier par défaut.
+const LIEU_LABEL = { CHANTIER: '🏗 Chantier', DEPOT: '🏭 Dépôt' };
+function lieuBadge(s) {
+  const lieu = s.lieu_livraison || 'CHANTIER';
+  return `<span class="lieu-badge ${lieu.toLowerCase()}">${LIEU_LABEL[lieu] || esc(lieu)}</span>`;
+}
+function lireRadio(name, defaut) {
+  return document.querySelector(`input[name="${name}"]:checked`)?.value || defaut;
+}
+function cocherRadio(name, valeur) {
+  document.querySelectorAll(`input[name="${name}"]`).forEach(r => { r.checked = r.value === valeur; });
+}
+
 // ── Init ───────────────────────────────────────────────────────
 async function init() {
   await checkAuth();
@@ -383,6 +396,7 @@ function affaireRowHTML(s, compact) {
         <div class="a-addr">${esc(s.adresse)}</div>
         <div class="a-meta">
           ${s.numero_affaire ? `N° ${esc(s.numero_affaire)} · ` : ''}
+          ${s.reference_client ? `Réf. <b>${esc(s.reference_client)}</b> · ` : ''}
           <span class="type-badge ${societeLivraison.toLowerCase()}">${TYPE_LABEL[societeLivraison] || societeLivraison}</span>
           · ${dateBadge}
         </div>
@@ -410,13 +424,20 @@ function openAssignModal(id) {
   document.getElementById('assign-modal-desc').textContent =
     `${stop.societe} — ${stop.adresse}`;
 
-  // Suggestion automatique si pas encore de tournée
+  // Suggestion automatique si pas encore de tournée. Le véhicule est
+  // « PL » d'office : l'ADV le passe en VL au besoin.
   const suggestion = !stop.tournee ? suggestTournee(stop) : null;
   const tourneeVal  = stop.tournee  || (suggestion ? suggestion.tournee  : '');
-  const vehiculeVal = stop.vehicule || (suggestion ? suggestion.vehicule : '');
+  const vehiculeVal = stop.vehicule || 'PL';
 
   document.getElementById('assign-tournee').value  = tourneeVal;
   document.getElementById('assign-vehicule').value = vehiculeVal;
+  cocherRadio('assign-lieu', stop.lieu_livraison || 'CHANTIER');
+
+  // Stop déjà placé dans une tournée : on modifie, on ne replanifie pas
+  const dejaPlace = stop.ordre !== 99 && !!stop.tournee;
+  document.getElementById('assign-modal-title').textContent = dejaPlace ? 'Modifier ce stop' : 'Planifier ce stop';
+  document.getElementById('assign-confirm-btn').textContent = dejaPlace ? 'Enregistrer' : 'Ajouter à la tournée';
 
   // Adresse, téléphone, date : l'ADV les corrige ici (le stop automatique
   // porte l'adresse de facturation de l'ARC et parfois aucune date).
@@ -428,7 +449,7 @@ function openAssignModal(id) {
   // Afficher ou masquer le bandeau suggestion
   const badge = document.getElementById('assign-suggestion');
   if (suggestion && !stop.tournee) {
-    badge.textContent = `💡 Suggestion basée sur le CP ${suggestion.cp} : ${suggestion.tournee} · ${suggestion.vehicule}`;
+    badge.textContent = `💡 Suggestion basée sur le CP ${suggestion.cp} : ${suggestion.tournee}`;
     badge.style.display = 'block';
   } else {
     badge.style.display = 'none';
@@ -452,6 +473,7 @@ async function confirmAssign() {
   const adresse   = document.getElementById('assign-adresse').value.trim();
   const telephone = document.getElementById('assign-telephone').value.trim();
   const dateT     = document.getElementById('assign-date').value;
+  const lieu      = lireRadio('assign-lieu', 'CHANTIER');
   const errEl     = document.getElementById('assign-error');
 
   errEl.style.display = 'none';
@@ -492,7 +514,9 @@ async function confirmAssign() {
       .filter(s => s.ordre !== 99 && s.id !== pendingAssignId)
       .reduce((m, s) => Math.max(m, s.ordre || 0), 0);
 
-    const body = { ordre: maxOrdre + 1, tournee, vehicule, date_tournee: dateT };
+    // Un stop déjà placé ce jour-là garde sa position dans la tournée
+    const gardeOrdre = stop && stop.ordre !== 99 && stop.date_tournee === dateT;
+    const body = { ordre: gardeOrdre ? stop.ordre : maxOrdre + 1, tournee, vehicule, lieu_livraison: lieu, date_tournee: dateT };
     // N'envoyer l'adresse que si elle change : l'API la regéocode.
     if (adresse !== (stop?.adresse || ''))     body.adresse   = adresse;
     if (telephone !== (stop?.telephone || '')) body.telephone = telephone || null;
@@ -653,8 +677,13 @@ function renderTournee() {
         <select id="sel-vehicule-${s.id}" style="border:1px solid var(--line);border-radius:6px;padding:3px 6px;font:inherit;font-size:11px;color:var(--ink);cursor:pointer;max-width:140px"
           onchange="markRowChange('${s.id}','vehicule',this.value)">
           <option value="">— Véhicule —</option>
-          <option value="VL" ${s.vehicule==='VL'?'selected':''}>VL — Véhicule léger</option>
           <option value="PL" ${s.vehicule==='PL'?'selected':''}>PL — Poids lourd</option>
+          <option value="VL" ${s.vehicule==='VL'?'selected':''}>VL — Véhicule léger</option>
+        </select>
+        <select id="sel-lieu-${s.id}" title="Lieu de livraison, affiché au livreur" style="border:1px solid var(--line);border-radius:6px;padding:3px 6px;font:inherit;font-size:11px;color:var(--ink);cursor:pointer;max-width:140px"
+          onchange="markRowChange('${s.id}','lieu_livraison',this.value)">
+          <option value="CHANTIER" ${(s.lieu_livraison||'CHANTIER')==='CHANTIER'?'selected':''}>🏗 Chantier</option>
+          <option value="DEPOT"    ${s.lieu_livraison==='DEPOT'?'selected':''}>🏭 Dépôt</option>
         </select>
       </div>`;
 
@@ -714,6 +743,10 @@ function renderTournee() {
             title="Marquer comme livré">
             ✓ Livré
           </button>
+          <button onclick="openAssignModal('${s.id}')" title="Modifier l'adresse, le lieu de livraison, le véhicule"
+            style="border:1px solid var(--line);background:var(--canvas);border-radius:8px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;color:var(--ink-soft);white-space:nowrap">
+            ✎ Modifier
+          </button>
           <button onclick="openDeleteStopModal('${s.id}')" title="Supprimer"
             style="border:none;background:none;cursor:pointer;color:var(--ink-mute);padding:2px 4px;border-radius:6px"
             onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--ink-mute)'">
@@ -731,7 +764,7 @@ function renderTournee() {
         <td class="strong">${s.ordre ?? '—'}</td>
         <td class="strong">${esc(s.societe)}</td>
         <td class="muted" style="max-width:180px;white-space:normal;word-break:break-word;line-height:1.4">${esc(s.adresse || '—').replace(/,\s*(\d{5})/g, ',<br>$1')}</td>
-        <td class="muted">${s.numero_affaire ? esc(s.numero_affaire) : '—'}</td>
+        <td class="muted">${s.numero_affaire ? esc(s.numero_affaire) : '—'}${s.reference_client ? `<div style="font-size:11px;font-weight:700;color:var(--turquoise-dark, #2E7F7F)">${esc(s.reference_client)}</div>` : ''}</td>
         <td><span class="type-badge ${societeLivraison.toLowerCase()}">${TYPE_LABEL[societeLivraison] || societeLivraison}</span></td>
         <td class="muted" style="white-space:nowrap">
           ${dateStr}
@@ -868,7 +901,8 @@ function openNewStopModal() {
   document.getElementById('ns-affaire').value         = '';
   document.getElementById('ns-type').value            = 'ATRIAL';
   document.getElementById('ns-tournee').value         = '';
-  document.getElementById('ns-vehicule').value        = '';
+  document.getElementById('ns-vehicule').value        = 'PL';
+  cocherRadio('ns-lieu', 'CHANTIER');
   document.getElementById('ns-type-produit').value    = '';
   document.getElementById('ns-reference-client').value = '';
   document.getElementById('ns-groupe-livraison').value = '';
@@ -1024,6 +1058,7 @@ async function createStop() {
   const societe_livraison = document.getElementById('ns-type').value;
   const tournee           = document.getElementById('ns-tournee').value;
   const vehicule          = document.getElementById('ns-vehicule').value;
+  const lieu_livraison    = lireRadio('ns-lieu', 'CHANTIER');
   const type_produit      = document.getElementById('ns-type-produit').value || null;
   const reference_client  = document.getElementById('ns-reference-client').value.trim() || null;
   const groupe_livraison  = document.getElementById('ns-groupe-livraison').value.trim() || null;
@@ -1060,6 +1095,7 @@ async function createStop() {
         societe_livraison,
         tournee,
         vehicule,
+        lieu_livraison,
         type_produit,
         reference_client,
         groupe_livraison,

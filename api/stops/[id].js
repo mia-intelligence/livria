@@ -23,10 +23,11 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === 'PATCH') {
-    const { statut, ordre, tournee, vehicule, societe_livraison, nombre_colis, emplacement, photo_url, magasin_valide, magasin_valide_at, commentaire_magasin, livreur_colis_confirme, colis_livres, type_produit, groupe_livraison, reference_client, arc_reference, date_tournee, societe, adresse, telephone, numero_affaire, latitude, longitude } = req.body;
+    const { statut, ordre, tournee, vehicule, lieu_livraison, societe_livraison, nombre_colis, emplacement, photo_url, magasin_valide, magasin_valide_at, commentaire_magasin, livreur_colis_confirme, colis_livres, type_produit, groupe_livraison, reference_client, arc_reference, date_tournee, societe, adresse, telephone, numero_affaire, latitude, longitude } = req.body;
     const VALID_STATUTS  = ['A_LIVRER', 'EN_COURS', 'LIVRE'];
     const VALID_TOURNEES = ['ENLEVEMENT','TOURNEE LUNDI','MARDI T06-T83EST','MERCREDI T13','TOURNEE JEUDI','VENDREDI T83 OUEST','LIVRAISON CHANTIER','TRANSPORTEUR'];
     const VALID_VEHICULES = ['PL', 'VL'];
+    const VALID_LIEUX     = ['CHANTIER', 'DEPOT'];
 
     const updates = {};
 
@@ -66,6 +67,13 @@ module.exports = async function handler(req, res) {
           return res.status(400).json({ error: 'vehicule invalide' });
         }
         updates.vehicule = vehicule;
+      }
+      // Lieu de livraison : chantier ou dépôt du client, affiché au livreur
+      if (lieu_livraison !== undefined) {
+        if (!VALID_LIEUX.includes(lieu_livraison)) {
+          return res.status(400).json({ error: 'lieu_livraison invalide' });
+        }
+        updates.lieu_livraison = lieu_livraison;
       }
     }
 

@@ -13,6 +13,14 @@ let pendingDepotPhotos = [];   // {base64, type} — photos du dépôt pas encor
 const STATUS_LABEL = { A_LIVRER: 'À livrer', EN_COURS: 'En cours', LIVRE: 'Livré' };
 const STATUS_CLASS = { A_LIVRER: 'todo',     EN_COURS: 'now',      LIVRE: 'done' };
 
+// Lieu de livraison et véhicule, choisis par l'ADV
+const LIEU_LABEL     = { CHANTIER: '🏗 Chantier', DEPOT: '🏭 Dépôt' };
+const VEHICULE_LABEL = { PL: '🚛 Poids lourd', VL: '🚗 Véhicule léger' };
+function lieuBadge(s) {
+  const lieu = s.lieu_livraison || 'CHANTIER';
+  return `<span class="lieu-badge ${lieu.toLowerCase()}">${LIEU_LABEL[lieu] || esc(lieu)}</span>`;
+}
+
 // ── Init ──────────────────────────────────────────────────────
 async function init() {
   await checkAuth();
@@ -265,6 +273,12 @@ function renderStopsList() {
       ? `<div style="margin-top:8px;display:flex;flex-wrap:wrap;align-items:center;gap:6px;">${warning}${extras.join('')}</div>`
       : '';
 
+    // Lieu de livraison (chantier / dépôt) et véhicule, fixés par l'ADV
+    const livraisonLine = `<div style="margin-top:5px;display:flex;flex-wrap:wrap;align-items:center;gap:6px">
+      ${lieuBadge(s)}
+      ${s.vehicule ? `<span style="font-size:11.5px;color:var(--ink-mute)">${VEHICULE_LABEL[s.vehicule] || esc(s.vehicule)}</span>` : ''}
+    </div>`;
+
     return `
     <div class="stop-card" onclick="openSheet('${s.id}')">
       <div class="stop-num ${sc}">${num}</div>
@@ -273,8 +287,10 @@ function renderStopsList() {
         <div class="stop-addr">${esc(s.adresse)}</div>
         <div class="stop-meta">
           ${s.numero_affaire ? `N° ${esc(s.numero_affaire)}` : ''}
+          ${s.reference_client ? ` · Réf. <b>${esc(s.reference_client)}</b>` : ''}
           ${s.telephone ? ` · <a href="tel:${esc(s.telephone)}" onclick="event.stopPropagation()">${esc(s.telephone)}</a>` : ''}
         </div>
+        ${livraisonLine}
         ${magasinSection}
       </div>
       <div class="stop-status"><span class="pill ${sc}">${lbl}</span></div>
@@ -332,7 +348,12 @@ function openSheet(id) {
   activeStopId = id;
 
   document.getElementById('sheet-title').textContent   = stop.societe;
-  document.getElementById('sheet-affaire').textContent = stop.numero_affaire ? `Affaire N° ${stop.numero_affaire}` : '';
+  document.getElementById('sheet-affaire').textContent = [
+    stop.numero_affaire  ? `Affaire N° ${stop.numero_affaire}` : null,
+    stop.reference_client ? `Réf. ${stop.reference_client}`    : null,
+  ].filter(Boolean).join(' · ');
+  document.getElementById('sheet-lieu').innerHTML =
+    `${lieuBadge(stop)}${stop.vehicule ? ` <span style="font-size:12.5px;color:var(--ink-soft)">${VEHICULE_LABEL[stop.vehicule] || esc(stop.vehicule)}</span>` : ''}`;
   document.getElementById('sheet-adresse').textContent = stop.adresse;
   document.getElementById('sheet-tel').innerHTML = stop.telephone
     ? `<a href="tel:${esc(stop.telephone)}">${esc(stop.telephone)}</a>`

@@ -214,7 +214,7 @@
           </div>
         </div>
         <div class="filter-bar">
-          <input type="search" id="aff-search" placeholder="Rechercher une société ou un n° d'affaire" autocomplete="off"
+          <input type="search" id="aff-search" placeholder="Rechercher une société, un n° d'affaire ou une référence" autocomplete="off"
             oninput="onAffairesSearch(this.value)"
             style="height:38px;min-width:300px;flex:1;max-width:460px;border-radius:10px;border:1px solid var(--line);padding:0 14px;font:inherit;font-size:13.5px;color:var(--ink);background:var(--bg);outline:none">
           <span class="muted" style="font-size:12px" id="aff-search-info"></span>
@@ -268,7 +268,7 @@
           <button class="chip"        data-statut="A_LIVRER" onclick="setStatutFilter('A_LIVRER')">À livrer</button>
           <button class="chip"        data-statut="EN_COURS" onclick="setStatutFilter('EN_COURS')">En cours</button>
           <button class="chip"        data-statut="LIVRE"    onclick="setStatutFilter('LIVRE')">Livré</button>
-          <input type="search" id="tournee-search" placeholder="Société ou n° d'affaire" autocomplete="off"
+          <input type="search" id="tournee-search" placeholder="Société, n° d'affaire ou référence" autocomplete="off"
             oninput="onTourneeSearch(this.value)"
             style="height:34px;min-width:220px;border-radius:99px;border:1px solid var(--line);padding:0 14px;font:inherit;font-size:12.5px;color:var(--ink);background:var(--bg);outline:none;margin-left:auto">
         </div>
@@ -368,9 +368,8 @@
       <div class="field">
         <label>Véhicule *</label>
         <select id="ns-vehicule">
-          <option value="">— Sélectionner —</option>
-          <option value="VL">VL — Véhicule léger (3,5t)</option>
           <option value="PL">PL — Poids lourd (11,99t)</option>
+          <option value="VL">VL — Véhicule léger (3,5t)</option>
         </select>
       </div>
       <div class="field">
@@ -381,6 +380,13 @@
           <option value="ALU">ALU</option>
           <option value="MIXTE">MIXTE</option>
         </select>
+      </div>
+    </div>
+    <div class="field">
+      <label>Lieu de livraison *</label>
+      <div class="radio-row">
+        <label class="radio-opt"><input type="radio" name="ns-lieu" value="CHANTIER" checked> 🏗 Chantier</label>
+        <label class="radio-opt"><input type="radio" name="ns-lieu" value="DEPOT"> 🏭 Dépôt</label>
       </div>
     </div>
     <div class="field" style="margin-top:12px">
@@ -406,7 +412,7 @@
 <div class="modal-overlay hidden" id="assign-modal">
   <div class="modal">
     <button class="modal-close" onclick="closeAssignModal()" aria-label="Fermer" title="Fermer">&times;</button>
-    <h2>Planifier ce stop</h2>
+    <h2 id="assign-modal-title">Planifier ce stop</h2>
     <div class="modal-sub" id="assign-modal-desc"></div>
 
     <div id="assign-suggestion" style="background:#E6F6F6;color:#2E7F7F;border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:14px;display:none"></div>
@@ -447,15 +453,21 @@
       <div class="field">
         <label>Véhicule *</label>
         <select id="assign-vehicule">
-          <option value="">— Sélectionner —</option>
-          <option value="VL">VL — Véhicule léger</option>
           <option value="PL">PL — Poids lourd</option>
+          <option value="VL">VL — Véhicule léger</option>
         </select>
+      </div>
+    </div>
+    <div class="field">
+      <label>Lieu de livraison *</label>
+      <div class="radio-row">
+        <label class="radio-opt"><input type="radio" name="assign-lieu" value="CHANTIER" checked> 🏗 Chantier</label>
+        <label class="radio-opt"><input type="radio" name="assign-lieu" value="DEPOT"> 🏭 Dépôt</label>
       </div>
     </div>
     <div class="modal-actions">
       <button class="btn" onclick="closeAssignModal()">Annuler</button>
-      <button class="btn primary" onclick="confirmAssign()">Ajouter à la tournée</button>
+      <button class="btn primary" id="assign-confirm-btn" onclick="confirmAssign()">Ajouter à la tournée</button>
     </div>
   </div>
 </div>

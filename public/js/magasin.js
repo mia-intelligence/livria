@@ -223,7 +223,7 @@ function weekCard(s) {
 
   return `
     <div class="week-card ${ms}" onclick="openPrepSheet('${s.id}')" title="Ouvrir la fiche de préparation">
-      ${s.numero_affaire ? `<div class="wk-affaire">N° ${esc(s.numero_affaire)}</div>` : ''}
+      ${s.numero_affaire || s.reference_client ? `<div class="wk-affaire">${[s.numero_affaire ? 'N° ' + esc(s.numero_affaire) : '', s.reference_client ? esc(s.reference_client) : ''].filter(Boolean).join(' · ')}</div>` : ''}
       <div class="wk-societe">${esc(s.societe)}</div>
       <div class="wk-meta">${esc(s.tournee || s.societe_livraison || '')}</div>
       ${tags.length ? `<div class="wk-tags">${tags.join('')}</div>` : ''}
@@ -315,6 +315,7 @@ function renderList() {
         <div class="stop-addr">${esc(s.adresse)}</div>
         <div class="stop-meta">
           ${s.numero_affaire ? `N° ${esc(s.numero_affaire)}` : ''}
+          ${s.reference_client ? `<span style="font-weight:700;color:var(--turquoise-dark, #2E7F7F)">Réf. ${esc(s.reference_client)}</span>` : ''}
           ${s.type_produit ? `<span style="font-size:11px;color:var(--ink-mute)">${esc(s.type_produit)}</span>` : ''}
           ${badge}
         </div>
@@ -336,8 +337,9 @@ function openPrepSheet(id) {
   document.getElementById('prep-societe').textContent = stop.societe;
   document.getElementById('prep-adresse').textContent = stop.adresse;
   const meta = [
-    stop.numero_affaire ? `N° ${stop.numero_affaire}` : null,
-    stop.tournee        ? stop.tournee                 : null,
+    stop.numero_affaire   ? `N° ${stop.numero_affaire}`     : null,
+    stop.reference_client ? `Réf. ${stop.reference_client}` : null,
+    stop.tournee          ? stop.tournee                   : null,
     stop.date_tournee   ? `Livraison le ${new Date(stop.date_tournee + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}` : 'Date de tournée à fixer par l\'ADV',
   ].filter(Boolean).join(' · ');
   document.getElementById('prep-meta').textContent = meta;

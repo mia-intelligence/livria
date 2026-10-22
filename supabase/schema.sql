@@ -40,6 +40,9 @@ CREATE TABLE IF NOT EXISTS stops (
                        'LIVRAISON CHANTIER','TRANSPORTEUR'
                      ])),
   vehicule           TEXT        CHECK (vehicule IS NULL OR vehicule = ANY (ARRAY['PL','VL'])),
+  -- Lieu de livraison (V6, migration 20261022_planification_auto.sql) :
+  -- chantier du client ou dépôt du client. Choisi par l'ADV, affiché au livreur.
+  lieu_livraison     TEXT        NOT NULL DEFAULT 'CHANTIER' CHECK (lieu_livraison IN ('CHANTIER','DEPOT')),
   -- Champs préparation magasin (ajoutés V2)
   nombre_colis       INTEGER,
   emplacement        TEXT,

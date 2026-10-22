@@ -276,6 +276,7 @@ module.exports = async function handler(req, res) {
       societe_livraison,
       tournee,
       vehicule,
+      lieu_livraison,
       date_tournee,
       latitude,
       longitude,
@@ -314,6 +315,11 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: 'type_produit invalide' });
     }
 
+    const VALID_LIEUX = ['CHANTIER', 'DEPOT'];
+    if (lieu_livraison && !VALID_LIEUX.includes(lieu_livraison)) {
+      return res.status(400).json({ error: 'lieu_livraison invalide' });
+    }
+
     // Géocodage automatique via TomTom (non bloquant)
     let geoLat = latitude || null;
     let geoLng = longitude || null;
@@ -333,7 +339,9 @@ module.exports = async function handler(req, res) {
         numero_affaire:    numero_affaire    || null,
         societe_livraison: societe_livraison || 'ATRIAL',
         tournee:           tournee           || null,
-        vehicule:          vehicule          || null,
+        // Poids lourd d'office : l'ADV le change au besoin
+        vehicule:          vehicule          || 'PL',
+        lieu_livraison:    lieu_livraison    || 'CHANTIER',
         statut:            'A_LIVRER',
         ordre:             ordre             || 99,
         date_tournee:      date_tournee      || new Date().toISOString().split('T')[0],
