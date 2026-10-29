@@ -604,10 +604,12 @@ async function confirmDeleteStop() {
 // ── Reporter stop ─────────────────────────────────────────────
 let pendingReporterId = null;
 
-function openReporterModal(id, currentDate) {
+// `desc` : libellé fourni par le planning pour un stop d'une autre date,
+// absent de allStops (qui ne contient que la tournée du jour).
+function openReporterModal(id, currentDate, desc) {
   pendingReporterId = id;
   const stop = allStops.find(s => s.id === id);
-  document.getElementById('reporter-modal-desc').textContent = stop ? `${stop.societe} — ${stop.adresse}` : '';
+  document.getElementById('reporter-modal-desc').textContent = stop ? `${stop.societe} — ${stop.adresse}` : (desc || '');
   document.getElementById('reporter-date').value = currentDate || new Date().toISOString().split('T')[0];
   document.getElementById('reporter-error').style.display = 'none';
   document.getElementById('reporter-modal').classList.remove('hidden');
@@ -644,6 +646,8 @@ async function confirmReporter() {
     }
     closeReporterModal();
     await loadStops();
+    // Report lancé depuis le planning : la grille se met à jour
+    if (typeof window.refreshPlanning === 'function') window.refreshPlanning();
   } catch {
     errEl.textContent   = 'Erreur réseau. Réessayez.';
     errEl.style.display = 'block';

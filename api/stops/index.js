@@ -167,20 +167,20 @@ module.exports = async function handler(req, res) {
 
       const { data, error } = await db
         .from('stops')
-        .select('date_tournee, statut, reference_client, societe, numero_affaire, tournee')
+        .select('id, date_tournee, statut, reference_client, societe, adresse, numero_affaire, tournee')
         .gte('date_tournee', from)
         .lte('date_tournee', to);
 
       if (error) return res.status(500).json({ error: error.message });
 
+      // Une entrée par stop (avec son id) : depuis le planning, l'ADV clique
+      // sur une entrée pour reporter le stop à une autre date.
       const result = {};
-      const seen   = {}; // date -> Set de clés d'entrées déjà ajoutées
       for (const stop of data) {
         const d = stop.date_tournee;
         if (!d) continue;
         if (!result[d]) {
           result[d] = { total: 0, livre: 0, en_cours: 0, a_livrer: 0, clients: [], affaires: [], entries: [] };
-          seen[d] = new Set();
         }
         result[d].total++;
         if (stop.statut === 'LIVRE')         result[d].livre++;
@@ -192,13 +192,10 @@ module.exports = async function handler(req, res) {
         if (client && !result[d].clients.includes(client))    result[d].clients.push(client);
         if (affaire && !result[d].affaires.includes(affaire)) result[d].affaires.push(affaire);
 
-        if (client || affaire) {
-          const key = `${affaire || ''}|${client || ''}`;
-          if (!seen[d].has(key)) {
-            seen[d].add(key);
-            result[d].entries.push({ affaire, client, tournee: stop.tournee || null, statut: stop.statut });
-          }
-        }
+        result[d].entries.push({
+          id: stop.id, affaire, client, adresse: stop.adresse || null,
+          tournee: stop.tournee || null, statut: stop.statut,
+        });
       }
       return res.status(200).json(result);
     }
