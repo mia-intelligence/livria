@@ -168,7 +168,8 @@ const SECTION_TITLES = {
   dashboard: 'Tableau de bord',
   affaires: 'Affaires à planifier',
   tournee: 'Tournée du jour',
-  planning: 'Planning des livraisons'
+  planning: 'Planning des livraisons',
+  historique: 'Historique des livraisons'
 };
 
 function showSection(name) {
@@ -182,6 +183,7 @@ function showSection(name) {
   document.getElementById('topbar-title').textContent = SECTION_TITLES[name] || name;
 
   if (name === 'planning') initPlanning();
+  if (name === 'historique' && !historiqueCharge) chargerHistorique();
 }
 
 // ── Load stops ─────────────────────────────────────────────────
@@ -1064,6 +1066,192 @@ function clearArcChoisi() {
   document.getElementById('ns-arc-reference').value = '';
   document.getElementById('ns-arc-choisi').classList.add('hidden');
   document.getElementById('ns-arc-choisi-texte').textContent = '';
+}
+
+// ── Historique ─────────────────────────────────────────────────
+// Recherche dans tous les stops, toutes dates confondues, pour retrouver
+// une livraison passée et ses photos (réclamation client, preuve de dépôt).
+let historiqueQuery   = '';
+let historiqueStops   = [];
+let historiqueMax     = 50;
+let historiqueCharge  = false;
+let historiqueTimer   = null;
+let historiqueRequete = 0; // n° de la dernière requête partie : les réponses plus anciennes sont ignorées
+
+function onHistoriqueSearch(v) {
+  historiqueQuery = v;
+  clearTimeout(historiqueTimer);
+  historiqueTimer = setTimeout(chargerHistorique, 300);
+}
+
+async function chargerHistorique() {
+  const q   = historiqueQuery.trim();
+  const num = ++historiqueRequete;
+  const info = document.getElementById('hist-search-info');
+  if (info) info.textContent = 'Recherche…';
+  try {
+    const res = await fetch(`/api/stops?historique=search&q=${encodeURIComponent(q)}`);
+    if (res.status === 401) { window.location.href = '/'; return; }
+    if (!res.ok) throw new Error(await res.text());
+    const d = await res.json();
+    if (num !== historiqueRequete) return; // une recherche plus récente est partie depuis
+    historiqueStops  = d.stops || [];
+    historiqueMax    = d.max || historiqueMax;
+    historiqueCharge = true;
+    renderHistorique();
+  } catch (e) {
+    console.error('Erreur historique:', e);
+    if (info) info.textContent = 'Erreur de chargement';
+  }
+}
+
+function renderHistorique() {
+  const tbody = document.getElementById('historique-tbody');
+  const info  = document.getElementById('hist-search-info');
+  const q = historiqueQuery.trim();
+
+  if (info) {
+    info.textContent = q
+      ? (historiqueStops.length >= historiqueMax
+          ? `${historiqueMax} premiers résultats · affinez la recherche`
+          : `${historiqueStops.length} résultat(s)`)
+      : `Dernières livraisons effectuées · ${historiqueStops.length}`;
+  }
+
+  if (!historiqueStops.length) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--ink-mute);padding:32px 0">${q ? 'Aucune livraison ne correspond' : 'Aucune livraison enregistrée'}</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = historiqueStops.map(s => {
+    const sl = s.societe_livraison || 'ATRIAL';
+    const photos = s.nb_photos
+      ? `<span title="${s.nb_depot} photo(s) de dépôt · ${s.nb_colissage} de colissage" style="font-weight:600;color:var(--turquoise);white-space:nowrap">📷 ${s.nb_photos}</span>`
+      : '<span class="muted">—</span>';
+    return `
+      <tr class="hist-row" onclick="ouvrirFicheHistorique('${s.id}')" title="Voir la fiche et les photos">
+        <td>
+          <div class="strong">${esc(s.societe)}</div>
+          ${s.reference_client ? `<div class="muted" style="font-size:11.5px">Réf. ${esc(s.reference_client)}</div>` : ''}
+        </td>
+        <td class="muted" style="max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(s.adresse)}">${esc(s.adresse)}</td>
+        <td>${s.numero_affaire ? esc(s.numero_affaire) : '<span class="muted">—</span>'}</td>
+        <td style="white-space:nowrap">${s.date_tournee ? fmtDateFr(s.date_tournee) : '<span class="muted">Sans date</span>'}</td>
+        <td>
+          <span class="type-badge ${sl.toLowerCase()}">${TYPE_LABEL[sl] || sl}</span>
+          ${s.tournee ? `<div class="muted" style="font-size:11px;margin-top:3px">${esc(s.tournee)}</div>` : ''}
+        </td>
+        <td><span class="pill ${STATUS_CLASS[s.statut] || 'todo'}">${STATUS_LABEL[s.statut] || s.statut}</span></td>
+        <td>${photos}</td>
+      </tr>`;
+  }).join('');
+}
+
+async function ouvrirFicheHistorique(id) {
+  const modal = document.getElementById('historique-modal');
+  const el    = document.getElementById('historique-fiche');
+  el.innerHTML = '<div style="color:var(--ink-mute);font-size:13px;text-align:center;padding:32px 0">Chargement…</div>';
+  modal.classList.remove('hidden');
+  try {
+    const res = await fetch(`/api/stops?historique=stop&id=${encodeURIComponent(id)}`);
+    if (res.status === 401) { window.location.href = '/'; return; }
+    if (!res.ok) throw new Error(await res.text());
+    el.innerHTML = ficheHistoriqueHTML(await res.json());
+  } catch (e) {
+    console.error('Erreur fiche historique:', e);
+    el.innerHTML = '<div style="background:var(--danger-soft);color:#A14444;border-radius:10px;padding:10px 14px;font-size:13px">Impossible de charger cette livraison. Réessayez dans un instant.</div>';
+  }
+}
+
+function closeHistoriqueModal() {
+  document.getElementById('historique-modal').classList.add('hidden');
+}
+
+function fmtDateHeureFr(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function ficheHistoriqueHTML(s) {
+  const arc = s.arc || {};
+  const sl  = s.societe_livraison || 'ATRIAL';
+  const champ = (label, valeur, large) => valeur
+    ? `<div${large ? ' class="large"' : ''}><div class="fl">${label}</div><div class="fv">${valeur}</div></div>`
+    : '';
+
+  // Statut et livraison
+  const statut = `<span class="pill ${STATUS_CLASS[s.statut] || 'todo'}">${STATUS_LABEL[s.statut] || s.statut}</span>`
+    + (s.livre_le ? ` <span class="muted" style="font-size:12px">le ${fmtDateHeureFr(s.livre_le)}</span>` : '');
+  const tournee = [s.tournee, s.vehicule, s.lieu_livraison === 'DEPOT' ? 'Dépôt du client' : (s.lieu_livraison === 'CHANTIER' ? 'Chantier' : '')]
+    .filter(Boolean).map(esc).join(' · ');
+
+  // Magasin
+  const magasin = s.magasin_valide
+    ? `Préparation validée${s.magasin_valide_at ? ' le ' + fmtDateHeureFr(s.magasin_valide_at) : ''}`
+    : 'Préparation non validée';
+  const colis = [
+    s.nombre_colis ? `${s.nombre_colis} colis préparés` : '',
+    s.colis_livres !== null && s.colis_livres !== undefined ? `${s.colis_livres} colis livrés` : '',
+    s.emplacement ? `Emplacement ${esc(s.emplacement)}` : '',
+  ].filter(Boolean).join(' · ');
+
+  // Contact : le stop d'abord, l'ARC ensuite
+  const telephone = s.telephone || arc.mobile_client || arc.telephone_client;
+  const commande  = arc.numero_document
+    ? `${esc(arc.numero_document)}${arc.reference ? ' · ' + esc(arc.reference) : ''}${arc.date_document ? ' · ARC du ' + fmtDateFr(arc.date_document) : ''}`
+    : (s.arc_reference ? esc(s.arc_reference) : '');
+
+  // Photos
+  const photos = s.stop_photos || [];
+  const tuile = (p, titre) => `
+    <div class="photo-tile">
+      <a href="${esc(p.photo_url)}" target="_blank" rel="noopener" title="Ouvrir en grand">
+        <img src="${esc(p.photo_url)}" alt="${titre}" loading="lazy">
+      </a>
+      <div class="photo-meta">
+        <span>${fmtDateHeureFr(p.created_at)}</span>
+        <a class="btn sm" href="${esc(p.url_telechargement || p.photo_url)}" download title="Enregistrer la photo pour la joindre à un mail">Télécharger</a>
+      </div>
+    </div>`;
+  const groupe = (type, titre, vide) => {
+    const liste = photos.filter(p => (type === 'livraison') === (p.type === 'livraison'));
+    return `<h3 class="fiche-h3">${titre} <span class="muted" style="font-weight:600">· ${liste.length}</span></h3>`
+      + (liste.length
+          ? `<div class="photos-grid">${liste.map(p => tuile(p, titre)).join('')}</div>`
+          : `<p class="muted" style="font-size:12.5px;margin:0">${vide}</p>`);
+  };
+
+  return `
+    <h2>${esc(s.societe)}</h2>
+    <div class="modal-sub" style="margin-bottom:0">
+      ${s.numero_affaire ? `N° ${esc(s.numero_affaire)} · ` : ''}
+      ${s.reference_client ? `Réf. <b>${esc(s.reference_client)}</b> · ` : ''}
+      <span class="type-badge ${sl.toLowerCase()}">${TYPE_LABEL[sl] || sl}</span>
+      ${s.origine === 'auto_fini' ? ' · <span title="Créé automatiquement quand l\'affaire est passée « fini » dans le suivi d\'affaires">Affaire finie</span>' : ''}
+    </div>
+
+    <div class="fiche-grid">
+      ${champ('Adresse livrée', esc(s.adresse), true)}
+      ${champ('Contact', esc(arc.contact))}
+      ${champ('Téléphone', telephone ? `<a href="tel:${esc(String(telephone).replace(/\s/g, ''))}" style="color:var(--turquoise);font-weight:600;text-decoration:none">${esc(telephone)}</a>` : '')}
+      ${champ('Date de tournée', s.date_tournee ? fmtDateFr(s.date_tournee) : 'Sans date')}
+      ${champ('Tournée', tournee)}
+      ${champ('Statut', statut)}
+      ${champ('Magasin', magasin)}
+      ${champ('Colis', colis)}
+      ${champ('Commande ARC', commande, true)}
+      ${champ('Gamme', esc(arc.gamme))}
+      ${champ('Livraison prévue sur l\'ARC', arc.date_livraison_prevue ? fmtDateFr(arc.date_livraison_prevue) + (arc.mode_livraison ? ' · ' + esc(arc.mode_livraison) : '') : '')}
+      ${champ('Commentaire magasin', esc(s.commentaire_magasin), true)}
+    </div>
+
+    ${groupe('livraison', 'Photos du dépôt', 'Aucune photo de dépôt. Le livreur n\'en a pas prise, ou la livraison est antérieure à la mise en place des photos.')}
+    ${groupe('colissage', 'Photos du colissage', 'Aucune photo de colissage.')}
+
+    <p class="muted" style="font-size:12px;margin:18px 0 0">
+      Pour envoyer une photo à un client, cliquez sur « Télécharger » et joignez le fichier à votre mail.
+      Les liens d'aperçu sont temporaires : ne les copiez pas dans un message.
+    </p>`;
 }
 
 function fmtEuro(n) {

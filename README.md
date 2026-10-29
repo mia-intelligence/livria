@@ -313,3 +313,17 @@ app.listen(process.env.PORT || 3000, () => {
 **Inclus** : Login · Vue Livreur mobile · Console ADV · Administration utilisateurs · Webhook Make
 
 **V2 (post-terrain)** : Reporting · Gestion anomalies avec photos · SMS clients · Bons de livraison signés · Multi-livreurs
+
+---
+
+## 11. Historique des livraisons (console ADV)
+
+Onglet **Historique** de la console ADV : recherche dans tous les stops, toutes dates confondues, par n° d'affaire, société, référence client, commande ARC ou adresse. Sans recherche, la liste montre les 50 dernières livraisons effectuées.
+
+Un clic sur une ligne ouvre la fiche de la livraison : adresse livrée, contact, tournée, statut et heure de livraison, préparation magasin, commande ARC, photos de colissage et de dépôt.
+
+- Les liens photo enregistrés en base expirent (30 jours pour le colissage, 12 mois pour le dépôt). La fiche en régénère à chaque ouverture, valables 1 heure.
+- Le bouton **Télécharger** enregistre le fichier : c'est lui qu'il faut joindre à un mail client, jamais le lien d'aperçu.
+- Les photos n'existent que pour les stops créés depuis la mise en place des photos de dépôt (mi-octobre 2026). La profondeur de l'historique suit la conservation des stops : 12 mois glissants.
+
+API : `GET /api/stops?historique=search&q=…` (liste) et `GET /api/stops?historique=stop&id=…` (fiche), réservées aux rôles ADV et ADMIN.

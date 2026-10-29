@@ -1,4 +1,4 @@
-const { getDB } = require('../../lib/db');
+const { getDB, getAdminDB } = require('../../lib/db');
 const { requireAuth } = require('../../lib/auth');
 const { geocoder } = require('../../lib/geo');
 
@@ -108,6 +108,50 @@ async function aPlanifier(db, tout) {
   };
 }
 
+
+// ── Historique (console ADV) ───────────────────────────────────────────────
+// Retrouver une livraison passée, toutes dates confondues, et ses photos :
+// réclamation d'un client, preuve de dépôt à lui envoyer.
+const BUCKET_PHOTOS          = 'livraisons-photos';
+const HISTORIQUE_MAX         = 50;
+const DUREE_LIEN_HISTORIQUE  = 60 * 60; // 1 h : le temps de consulter la fiche
+
+// Colonnes utiles à la liste de résultats (pas de lien photo : juste le compte).
+const HISTORIQUE_COLS = [
+  'id', 'societe', 'adresse', 'numero_affaire', 'reference_client', 'arc_reference',
+  'societe_livraison', 'statut', 'date_tournee', 'tournee', 'livre_le', 'created_at',
+  'stop_photos(id, type)',
+].join(', ');
+
+// Chemin de l'objet Storage à partir du lien signé enregistré dans stop_photos.
+// Les liens signés expirent (30 jours pour le colissage) : la fiche en refait
+// un à chaque ouverture, pour la consultation et pour le téléchargement.
+function cheminPhoto(url) {
+  const m = new RegExp(`/object/sign/${BUCKET_PHOTOS}/([^?]+)`).exec(url || '');
+  try { return m ? decodeURIComponent(m[1]) : null; } catch { return null; }
+}
+
+async function photosFraiches(adminDb, photos) {
+  const stockage = adminDb.storage.from(BUCKET_PHOTOS);
+  const liste = await Promise.all((photos || []).map(async p => {
+    const chemin = cheminPhoto(p.photo_url);
+    if (!chemin) return { ...p, url_telechargement: p.photo_url, fichier: null };
+    const [vue, telechargement] = await Promise.all([
+      stockage.createSignedUrl(chemin, DUREE_LIEN_HISTORIQUE),
+      // ?download=<nom> : le navigateur enregistre le fichier au lieu de l'afficher
+      stockage.createSignedUrl(chemin, DUREE_LIEN_HISTORIQUE, { download: chemin }),
+    ]);
+    const urlVue = vue.data?.signedUrl || p.photo_url;
+    return {
+      ...p,
+      photo_url:          urlVue,
+      url_telechargement: telechargement.data?.signedUrl || urlVue,
+      fichier:            chemin,
+    };
+  }));
+  return liste.sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+}
+
 module.exports = async function handler(req, res) {
   const session = await requireAuth(req, res);
   if (!session) return;
@@ -116,6 +160,62 @@ module.exports = async function handler(req, res) {
   const role = session.users.role;
 
   if (req.method === 'GET') {
+    // Historique : ?historique=search&q=...  (liste) · ?historique=stop&id=... (fiche)
+    // Hébergé ici pour rester sous la limite de 12 fonctions Vercel Hobby.
+    if (req.query.historique === 'search') {
+      if (!['ADV', 'ADMIN'].includes(role)) return res.status(403).json({ error: 'Accès refusé' });
+      const q = String(req.query.q || '').trim();
+
+      let query = db.from('stops').select(HISTORIQUE_COLS)
+        .order('date_tournee', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false })
+        .limit(HISTORIQUE_MAX);
+      if (q) {
+        // Société, n° d'affaire, référence client, commande ARC ou adresse.
+        // Les virgules et parenthèses casseraient la syntaxe PostgREST : on les retire.
+        const motif = `%${q.replace(/[,()]/g, ' ')}%`;
+        query = query.or([
+          `societe.ilike.${motif}`, `numero_affaire.ilike.${motif}`, `reference_client.ilike.${motif}`,
+          `arc_reference.ilike.${motif}`, `adresse.ilike.${motif}`,
+        ].join(','));
+      } else {
+        // Sans recherche : les dernières livraisons effectuées
+        query = query.eq('statut', 'LIVRE');
+      }
+      const { data, error } = await query;
+      if (error) return res.status(500).json({ error: error.message });
+
+      const stops = (data || []).map(({ stop_photos, ...s }) => ({
+        ...s,
+        nb_photos:    (stop_photos || []).length,
+        nb_depot:     (stop_photos || []).filter(p => p.type === 'livraison').length,
+        nb_colissage: (stop_photos || []).filter(p => p.type !== 'livraison').length,
+      }));
+      return res.status(200).json({ q, max: HISTORIQUE_MAX, stops });
+    }
+
+    if (req.query.historique === 'stop') {
+      if (!['ADV', 'ADMIN'].includes(role)) return res.status(403).json({ error: 'Accès refusé' });
+      const id = String(req.query.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requis' });
+
+      const { data, error } = await db
+        .from('stops').select('*, stop_photos(id, photo_url, type, created_at)')
+        .eq('id', id).maybeSingle();
+      if (error) return res.status(500).json({ error: error.message });
+      if (!data) return res.status(404).json({ error: 'Stop introuvable' });
+
+      const [stop] = await attacheArc(db, [data]);
+      try {
+        stop.stop_photos = await photosFraiches(getAdminDB(), stop.stop_photos);
+      } catch (e) {
+        // Storage indisponible : on garde les liens enregistrés, quitte à ce qu'ils aient expiré
+        console.error('Historique : liens photo non renouvelés', e.message);
+        stop.stop_photos = (stop.stop_photos || []).map(p => ({ ...p, url_telechargement: p.photo_url, fichier: null }));
+      }
+      return res.status(200).json(stop);
+    }
+
     // Recherche d'une commande ARC pour créer un stop : ?arc=search&q=...
     // Hébergé ici pour rester sous la limite de 12 fonctions Vercel Hobby.
     // Lit la table alimentée chaque nuit par le script ARC (arc_commandes).
