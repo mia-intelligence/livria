@@ -10,6 +10,8 @@
   let tvTimer = null;           // rafraîchissement auto
   let clockTimer = null;
   let lastTotals = { total: 0, livre: 0, en_cours: 0, a_livrer: 0 };
+  let lastData = null;          // dernière réponse API, pour re-rendre sans recharger
+  const expandedDays = new Set(); // jours dont la liste complète est dépliée (vue semaine)
 
   const TV_REFRESH_MS = 60000;
 
@@ -139,6 +141,11 @@
     return d;
   }
 
+  // Rechargement depuis l'extérieur (après un report de stop, par exemple)
+  window.refreshPlanning = function () {
+    if (document.getElementById('planning-grid-wrapper')) fetchAndRender();
+  };
+
   /* ── Fetch API ────────────────────────────────────────────── */
   function fetchAndRender() {
     const wrapper = document.getElementById('planning-grid-wrapper');
@@ -148,7 +155,7 @@
     const { from, to } = dateRange();
     fetch(`/api/stops?planning=true&from=${from}&to=${to}`)
       .then(r => r.json())
-      .then(data => renderGrid(data, from, to))
+      .then(data => { lastData = data; renderGrid(data, from, to); })
       .catch(() => {
         wrapper.innerHTML = '<div style="color:var(--danger);font-size:13px;text-align:center;padding:40px 0">Erreur de chargement</div>';
       });
@@ -223,7 +230,7 @@
           </div>
           <div class="pdc-count">${info.total > 0 ? info.total : '<span class="pdc-empty">—</span>'}</div>
           ${info.total > 0 ? `<div class="pdc-label">stop${info.total > 1 ? 's' : ''}</div>` : ''}
-          ${info.total > 0 ? renderEntries(info) : ''}
+          ${info.total > 0 ? renderEntries(info, key) : ''}
           ${info.total > 0 ? renderBar(info) : ''}
         </div>`;
     }
@@ -320,7 +327,7 @@
   }
 
   /* ── Liste des livraisons du jour : référence affaire + client ── */
-  function renderEntries(info) {
+  function renderEntries(info, dayKey) {
     // `entries` (API V2) porte l'affaire ET le client ; `clients` = repli
     const entries = info.entries && info.entries.length
       ? info.entries
@@ -328,22 +335,47 @@
 
     if (!entries.length) return '';
 
-    const MAX   = tvMode ? entries.length : 4;
+    const MAX   = tvMode || expandedDays.has(dayKey) ? entries.length : 4;
     const shown = entries.slice(0, MAX);
     const rest  = entries.length - shown.length;
+
+    // Sur la console ADV (fenêtre « Reporter » présente), un stop pas encore
+    // livré se reporte d'un clic. Rien en mode écran ni côté admin.
+    const peutReporter = !tvMode && typeof window.openReporterModal === 'function';
 
     let html = '<div class="pdc-entries">';
     for (const e of shown) {
       const st = (e.statut || 'A_LIVRER').toLowerCase();
-      html += `<div class="pdc-entry st-${esc(st)}">
+      const cliquable = peutReporter && e.id && e.statut !== 'LIVRE';
+      const desc = [e.client, e.adresse].filter(Boolean).join(' — ');
+      const attrs = cliquable
+        ? ` class="pdc-entry st-${esc(st)} pdc-clickable" title="Cliquer pour reporter ce stop"
+            onclick="openReporterModal('${esc(e.id)}','${esc(dayKey)}','${esc(desc)}')"`
+        : ` class="pdc-entry st-${esc(st)}"`;
+      html += `<div${attrs}>
         ${e.affaire ? `<span class="pdc-affaire">N° ${esc(e.affaire)}</span>` : ''}
         ${e.client  ? `<span class="pdc-client">${esc(e.client)}</span>` : ''}
       </div>`;
     }
-    if (rest > 0) html += `<div class="pdc-entry-more">+${rest} autre${rest > 1 ? 's' : ''}</div>`;
+    if (rest > 0) {
+      html += `<div class="pdc-entry-more pdc-clickable" title="Voir toute la journée"
+        onclick="planningDeplier('${esc(dayKey)}')">+${rest} autre${rest > 1 ? 's' : ''}</div>`;
+    } else if (!tvMode && expandedDays.has(dayKey) && entries.length > 4) {
+      html += `<div class="pdc-entry-more pdc-clickable" onclick="planningReplier('${esc(dayKey)}')">Réduire</div>`;
+    }
     html += '</div>';
     return html;
   }
+
+  // Déplier / replier la liste complète d'une journée (vue semaine)
+  window.planningDeplier = function (dayKey) {
+    expandedDays.add(dayKey);
+    if (lastData) renderGrid(lastData);
+  };
+  window.planningReplier = function (dayKey) {
+    expandedDays.delete(dayKey);
+    if (lastData) renderGrid(lastData);
+  };
 
   function esc(str) {
     if (str === null || str === undefined) return '';

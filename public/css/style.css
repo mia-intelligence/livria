@@ -441,6 +441,10 @@ html, body {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .pdc-entry-more { font-size: 10px; color: var(--ink-mute); padding: 1px 4px; }
+/* Console ADV : une entrée cliquable ouvre la fenêtre « Reporter » */
+.pdc-clickable { cursor: pointer; transition: background .12s, border-color .12s; }
+.pdc-entry.pdc-clickable:hover { background: var(--turquoise-soft, #E6F6F6); }
+.pdc-entry-more.pdc-clickable:hover { color: var(--turquoise-dark, #2E7F7F); text-decoration: underline; }
 
 /* ── Planning : mode écran (affichage salarié) ──────────────────
    Activé par la classe .planning-tv sur <body> + Fullscreen API. */
