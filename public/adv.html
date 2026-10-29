@@ -58,6 +58,17 @@
 
     /* Nouvelle livraison modal */
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    /* Historique */
+    .hist-row td { cursor: pointer; }
+    .fiche-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; font-size: 13px; margin: 16px 0 6px; }
+    .fiche-grid .fl { font-size: 10.5px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; margin-bottom: 2px; }
+    .fiche-grid .fv { color: var(--ink); line-height: 1.4; }
+    .fiche-grid .large { grid-column: 1 / -1; }
+    .fiche-h3 { margin: 22px 0 8px; font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+    .photos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+    .photo-tile img { width: 100%; height: 130px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); display: block; background: var(--canvas); }
+    .photo-tile .photo-meta { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-top: 6px; font-size: 11px; color: var(--ink-soft); white-space: nowrap; }
+    .photo-tile .photo-meta a.btn { text-decoration: none; height: 28px; padding: 0 10px; font-size: 11.5px; }
   </style>
 </head>
 <body>
@@ -91,6 +102,10 @@
       <a data-section="planning" onclick="showSection('planning')">
         <svg class="ic" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"/><path d="M16 2v4M8 2v4M3 10h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         Planning
+      </a>
+      <a data-section="historique" onclick="showSection('historique')">
+        <svg class="ic" viewBox="0 0 24 24" fill="none"><path d="M3 12a9 9 0 1 0 3-6.7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M3 4v5h5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 7v5l3 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Historique
       </a>
     </nav>
 
@@ -294,6 +309,40 @@
         </div>
       </div>
 
+      <!-- ── HISTORIQUE ─────────────────────────────────────── -->
+      <div class="stops-section" id="section-historique">
+        <div class="page-head">
+          <div>
+            <h1>Historique</h1>
+            <div class="lead">Retrouver une livraison passée, toutes dates confondues, avec ses photos de colissage et de dépôt</div>
+          </div>
+        </div>
+        <div class="filter-bar">
+          <input type="search" id="hist-search" placeholder="N° d'affaire, société, référence client ou adresse" autocomplete="off"
+            oninput="onHistoriqueSearch(this.value)"
+            style="height:38px;min-width:300px;flex:1;max-width:460px;border-radius:10px;border:1px solid var(--line);padding:0 14px;font:inherit;font-size:13.5px;color:var(--ink);background:var(--bg);outline:none">
+          <span class="muted" style="font-size:12px" id="hist-search-info"></span>
+        </div>
+        <div class="card" style="padding:0">
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th>Société</th>
+                <th>Adresse</th>
+                <th>Affaire</th>
+                <th>Date</th>
+                <th>Tournée</th>
+                <th>Statut</th>
+                <th>Photos</th>
+              </tr>
+            </thead>
+            <tbody id="historique-tbody">
+              <tr><td colspan="7" style="text-align:center;color:var(--ink-mute);padding:32px 0">Chargement…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
     </div><!-- /page-content -->
   </div><!-- /main-area -->
 </div><!-- /app-layout -->
@@ -483,6 +532,14 @@
       <button class="btn" onclick="closeDeleteStopModal()">Annuler</button>
       <button class="btn danger" onclick="confirmDeleteStop()">Supprimer</button>
     </div>
+  </div>
+</div>
+
+<!-- MODAL FICHE HISTORIQUE -->
+<div class="modal-overlay hidden" id="historique-modal">
+  <div class="modal" style="max-width:780px">
+    <button class="modal-close" onclick="closeHistoriqueModal()" aria-label="Fermer" title="Fermer">&times;</button>
+    <div id="historique-fiche"></div>
   </div>
 </div>
 
