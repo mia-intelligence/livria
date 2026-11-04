@@ -24,7 +24,7 @@ module.exports = async function handler(req, res) {
 
   if (req.method === 'PATCH') {
     const { statut, ordre, tournee, vehicule, lieu_livraison, adresse_verifiee, societe_livraison, nombre_colis, emplacement, photo_url, magasin_valide, magasin_valide_at, commentaire_magasin, livreur_colis_confirme, colis_livres, type_produit, groupe_livraison, reference_client, arc_reference, date_tournee, societe, adresse, telephone, numero_affaire, latitude, longitude } = req.body;
-    const VALID_STATUTS  = ['A_LIVRER', 'EN_COURS', 'LIVRE'];
+    const VALID_STATUTS  = ['A_LIVRER', 'EN_COURS', 'LIVRE', 'ANNULE'];
     const VALID_TOURNEES = ['ENLEVEMENT','TOURNEE LUNDI','MARDI T06-T83EST','MERCREDI T13','TOURNEE JEUDI','VENDREDI T83 OUEST','LIVRAISON CHANTIER','TRANSPORTEUR'];
     const VALID_VEHICULES = ['PL', 'VL'];
     const VALID_LIEUX     = ['CHANTIER', 'DEPOT'];
@@ -34,6 +34,12 @@ module.exports = async function handler(req, res) {
     if (statut !== undefined) {
       if (!VALID_STATUTS.includes(statut)) {
         return res.status(400).json({ error: 'statut invalide' });
+      }
+      // Annuler une livraison est une décision ADV : le livreur ne peut pas.
+      // Le passage en ANNULE est horodaté en base (annule_le) et remonte vers
+      // le suivi d'affaires par la vue retour_suivi.
+      if (statut === 'ANNULE' && !['ADV', 'ADMIN'].includes(role)) {
+        return res.status(403).json({ error: 'Seule l\'ADV peut annuler une livraison' });
       }
       if (role === 'LIVREUR') {
         const { data: stop } = await db.from('stops').select('societe_livraison').eq('id', id).single();

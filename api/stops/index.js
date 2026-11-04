@@ -280,11 +280,12 @@ module.exports = async function handler(req, res) {
         const d = stop.date_tournee;
         if (!d) continue;
         if (!result[d]) {
-          result[d] = { total: 0, livre: 0, en_cours: 0, a_livrer: 0, clients: [], affaires: [], entries: [] };
+          result[d] = { total: 0, livre: 0, en_cours: 0, a_livrer: 0, annule: 0, clients: [], affaires: [], entries: [] };
         }
         result[d].total++;
         if (stop.statut === 'LIVRE')         result[d].livre++;
         else if (stop.statut === 'EN_COURS') result[d].en_cours++;
+        else if (stop.statut === 'ANNULE')   result[d].annule++;
         else                                 result[d].a_livrer++;
 
         const client  = stop.reference_client || stop.societe || null;
@@ -308,7 +309,7 @@ module.exports = async function handler(req, res) {
       const { data, error } = await db
         .from('stops').select('*, stop_photos(id, photo_url, type, created_at)')
         .eq('magasin_valide', false)
-        .neq('statut', 'LIVRE')
+        .not('statut', 'in', '(LIVRE,ANNULE)')
         .order('date_tournee', { ascending: true, nullsFirst: true })
         .order('ordre', { ascending: true });
       if (error) return res.status(500).json({ error: error.message });
@@ -338,8 +339,11 @@ module.exports = async function handler(req, res) {
       query = query
         .eq('societe_livraison', 'ATRIAL')
         .eq('magasin_valide', true)
-        .not('tournee', 'is', null);
+        .not('tournee', 'is', null)
+        .neq('statut', 'ANNULE');
     }
+    // Magasin : rien à préparer pour une livraison annulée
+    if (role === 'MAGASIN') query = query.neq('statut', 'ANNULE');
 
     const { data, error } = await query;
     if (error) return res.status(500).json({ error: error.message });

@@ -52,8 +52,10 @@ function suggestTournee(stop) {
   return rule ? { tournee: rule.tournee, vehicule: rule.vehicule, cp } : null;
 }
 
-const STATUS_LABEL = { A_LIVRER: 'À livrer', EN_COURS: 'En cours', LIVRE: 'Livré' };
-const STATUS_CLASS = { A_LIVRER: 'todo', EN_COURS: 'now', LIVRE: 'done' };
+const STATUS_LABEL = { A_LIVRER: 'À livrer', EN_COURS: 'En cours', LIVRE: 'Livré', ANNULE: 'Annulé' };
+const STATUS_CLASS = { A_LIVRER: 'todo', EN_COURS: 'now', LIVRE: 'done', ANNULE: 'cancel' };
+// Stop clos : livré ou annulé. Ni en attente, ni à vérifier.
+function estClos(s) { return s.statut === 'LIVRE' || s.statut === 'ANNULE'; }
 
 const TYPE_COLOR = {
   ATRIAL: '#4BBFBF',
@@ -75,7 +77,7 @@ function lieuBadge(s) {
 }
 // Vigilance adresse : stop automatique dont l'adresse (facturation, lue sur
 // l'ARC) n'a pas encore été confirmée par l'ADV.
-function adresseAVerifier(s) { return s.adresse_verifiee === false && s.statut !== 'LIVRE'; }
+function adresseAVerifier(s) { return s.adresse_verifiee === false && !estClos(s); }
 function adresseBadge(s, avecBouton) {
   if (!adresseAVerifier(s)) return '';
   return `<div style="display:inline-flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap">
@@ -235,7 +237,7 @@ async function loadAPlanifier() {
 function renderDashboard() {
   const today = allStops;
   const done = today.filter(s => s.statut === 'LIVRE').length;
-  const pending = today.filter(s => s.statut !== 'LIVRE').length;
+  const pending = today.filter(s => !estClos(s)).length;
   const unplanned = stopsAPlanifier.length + arcAPlanifier.length;
   const pct = today.length ? Math.round((done / today.length) * 100) : 0;
 
@@ -753,7 +755,24 @@ function renderTournee() {
 
     // Colonne actions
     let actionsCell = '';
-    if (s.statut === 'LIVRE') {
+    if (s.statut === 'ANNULE') {
+      const heure = s.annule_le
+        ? ' le ' + new Date(s.annule_le).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
+        : '';
+      actionsCell = `
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span style="color:var(--ink-mute);font-weight:600;font-size:12px">✕ Annulé${heure}</span>
+          <button onclick="changeStopStatus('${s.id}','A_LIVRER')" title="Remettre la livraison à faire"
+            style="border:1px solid var(--line);background:var(--canvas);border-radius:8px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;color:var(--ink-mute);white-space:nowrap">
+            ↩ Rétablir
+          </button>
+          <button onclick="openDeleteStopModal('${s.id}')" title="Supprimer"
+            style="border:none;background:none;cursor:pointer;color:var(--ink-mute);padding:2px 4px;border-radius:6px"
+            onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--ink-mute)'">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><polyline points="3 6 5 6 21 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M19 6l-1 14H6L5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M10 11v6M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9 6V4h6v2" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+          </button>
+        </div>`;
+    } else if (s.statut === 'LIVRE') {
       // Heure du clic « livré » et photo du dépôt prise par le livreur
       const heure = s.livre_le
         ? ' ' + new Date(s.livre_le).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
@@ -785,6 +804,7 @@ function renderTournee() {
             <option value="A_LIVRER" ${s.statut === 'A_LIVRER' ? 'selected' : ''}>À livrer</option>
             <option value="EN_COURS" ${s.statut === 'EN_COURS' ? 'selected' : ''}>En cours</option>
             <option value="LIVRE">Livré</option>
+            <option value="ANNULE">Annulé</option>
           </select>
           <button onclick="changeStopStatus('${s.id}','LIVRE')"
             style="background:var(--success);color:#fff;border:none;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap"
@@ -830,6 +850,12 @@ function renderTournee() {
 }
 
 async function changeStopStatus(id, newStatut) {
+  // L'annulation remonte dans le suivi d'affaires : on demande confirmation.
+  if (newStatut === 'ANNULE') {
+    const s = allStops.find(x => x.id === id);
+    const ok = confirm(`Annuler la livraison${s ? ' de ' + s.societe : ''} ?\n\nLe stop restera visible comme « Annulé » et l'annulation sera transmise au suivi d'affaires.`);
+    if (!ok) { renderTournee(); return; }
+  }
   try {
     const res = await fetch(`/api/stops/${id}`, {
       method: 'PATCH',
@@ -1186,7 +1212,8 @@ function ficheHistoriqueHTML(s) {
 
   // Statut et livraison
   const statut = `<span class="pill ${STATUS_CLASS[s.statut] || 'todo'}">${STATUS_LABEL[s.statut] || s.statut}</span>`
-    + (s.livre_le ? ` <span class="muted" style="font-size:12px">le ${fmtDateHeureFr(s.livre_le)}</span>` : '');
+    + (s.livre_le ? ` <span class="muted" style="font-size:12px">le ${fmtDateHeureFr(s.livre_le)}</span>` : '')
+    + (s.statut === 'ANNULE' && s.annule_le ? ` <span class="muted" style="font-size:12px">le ${fmtDateHeureFr(s.annule_le)}</span>` : '');
   const tournee = [s.tournee, s.vehicule, s.lieu_livraison === 'DEPOT' ? 'Dépôt du client' : (s.lieu_livraison === 'CHANTIER' ? 'Chantier' : '')]
     .filter(Boolean).map(esc).join(' · ');
 
@@ -1378,7 +1405,7 @@ function renderAdvMap() {
   const bounds = [];
 
   located.forEach((s, i) => {
-    const color = { LIVRE: '#3DBE7A', EN_COURS: '#F2A93B', A_LIVRER: '#9AA3AD' }[s.statut] || '#9AA3AD';
+    const color = { LIVRE: '#3DBE7A', EN_COURS: '#F2A93B', A_LIVRER: '#9AA3AD', ANNULE: '#C7CDD3' }[s.statut] || '#9AA3AD';
     const label = String(s.ordre ?? i + 1);
 
     const icon = L.divIcon({

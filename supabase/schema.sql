@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS stops (
   longitude       FLOAT,
   numero_affaire      TEXT,
   societe_livraison   TEXT        NOT NULL CHECK (societe_livraison IN ('ATRIAL', 'ENLEVEMENT', 'TRANSPORTEUR')),
-  statut              TEXT        NOT NULL DEFAULT 'A_LIVRER' CHECK (statut IN ('A_LIVRER', 'EN_COURS', 'LIVRE')),
+  statut              TEXT        NOT NULL DEFAULT 'A_LIVRER' CHECK (statut IN ('A_LIVRER', 'EN_COURS', 'LIVRE')),  -- + 'ANNULE' depuis migrations/20261104_statut_annule_retour_suivi.sql
   ordre              INTEGER     NOT NULL DEFAULT 99,
   date_tournee       DATE        NOT NULL DEFAULT CURRENT_DATE,
   -- Champs tournée / véhicule (ajoutés V2)

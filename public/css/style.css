@@ -100,6 +100,8 @@ html, body {
 .pill.now::before   { background: var(--status-now-dot); }
 .pill.done  { color: var(--status-done-fg);  background: var(--status-done-bg); }
 .pill.done::before  { background: var(--status-done-dot); }
+.pill.cancel { color: var(--ink-mute); background: var(--canvas); text-decoration: line-through; }
+.pill.cancel::before { background: var(--ink-mute); }
 
 /* ── Type badges ─────────────────────────────────────────── */
 .type-badge {
@@ -432,6 +434,7 @@ html, body {
 .pdc-entry.st-livre    { border-left-color: var(--status-done-dot); }
 .pdc-entry.st-en_cours { border-left-color: var(--status-now-dot); }
 .pdc-entry.st-a_livrer { border-left-color: var(--status-todo-dot); }
+.pdc-entry.st-annule   { border-left-color: var(--line); opacity: .55; text-decoration: line-through; }
 .pdc-affaire {
   display: block; font-size: 10.5px; font-weight: 800; color: var(--turquoise-dark);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
