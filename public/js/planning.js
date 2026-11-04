@@ -346,7 +346,7 @@
     let html = '<div class="pdc-entries">';
     for (const e of shown) {
       const st = (e.statut || 'A_LIVRER').toLowerCase();
-      const cliquable = peutReporter && e.id && e.statut !== 'LIVRE';
+      const cliquable = peutReporter && e.id && e.statut !== 'LIVRE' && e.statut !== 'ANNULE';
       const desc = [e.client, e.adresse].filter(Boolean).join(' — ');
       const attrs = cliquable
         ? ` class="pdc-entry st-${esc(st)} pdc-clickable" title="Cliquer pour reporter ce stop"

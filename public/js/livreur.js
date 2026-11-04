@@ -11,8 +11,8 @@ let stopsDemain = null;     // stops de la prochaine tournée (chargés à la de
 let routeLoaded = false;
 let pendingDepotPhotos = [];   // {base64, type} — photos du dépôt pas encore envoyées
 
-const STATUS_LABEL = { A_LIVRER: 'À livrer', EN_COURS: 'En cours', LIVRE: 'Livré' };
-const STATUS_CLASS = { A_LIVRER: 'todo',     EN_COURS: 'now',      LIVRE: 'done' };
+const STATUS_LABEL = { A_LIVRER: 'À livrer', EN_COURS: 'En cours', LIVRE: 'Livré', ANNULE: 'Annulé' };
+const STATUS_CLASS = { A_LIVRER: 'todo',     EN_COURS: 'now',      LIVRE: 'done',  ANNULE: 'cancel' };
 
 // Lieu de livraison et véhicule, choisis par l'ADV
 const LIEU_LABEL     = { CHANTIER: '🏗 Chantier', DEPOT: '🏭 Dépôt' };

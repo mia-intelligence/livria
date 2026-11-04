@@ -481,7 +481,7 @@ function esc(str) {
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 function labelStatut(s) {
-  return { A_LIVRER: 'À livrer', EN_COURS: 'En cours', LIVRE: 'Livré' }[s] || s;
+  return { A_LIVRER: 'À livrer', EN_COURS: 'En cours', LIVRE: 'Livré', ANNULE: 'Annulé' }[s] || s;
 }
 
 // ── Boot ────────────────────────────────────────────────────────
