@@ -307,6 +307,14 @@ function renderDebugStops(date) {
   `).join('');
 }
 
+// Nombre de colis : vide → null, sinon entier >= 0 (0 est une valeur valide).
+function parseColis(v) {
+  const s = String(v ?? '').trim();
+  if (s === '') return null;
+  const n = parseInt(s, 10);
+  return Number.isNaN(n) || n < 0 ? null : n;
+}
+
 function openEditStop(id) {
   const s = debugStops.find(x => x.id === id);
   if (!s) return;
@@ -324,7 +332,7 @@ function openEditStop(id) {
   document.getElementById('es-tournee').value          = s.tournee || '';
   document.getElementById('es-vehicule').value         = s.vehicule || '';
   document.getElementById('es-ordre').value            = s.ordre || '';
-  document.getElementById('es-colis').value            = s.nombre_colis || '';
+  document.getElementById('es-colis').value            = s.nombre_colis ?? '';
   document.getElementById('es-emplacement').value      = s.emplacement || '';
   document.getElementById('es-type-produit').value     = s.type_produit || '';
   document.getElementById('es-reference-client').value = s.reference_client || '';
@@ -353,7 +361,7 @@ async function saveEditStop() {
     tournee:          document.getElementById('es-tournee').value || null,
     vehicule:         document.getElementById('es-vehicule').value || null,
     ordre:            parseInt(document.getElementById('es-ordre').value) || null,
-    nombre_colis:     parseInt(document.getElementById('es-colis').value) || null,
+    nombre_colis:     parseColis(document.getElementById('es-colis').value),
     emplacement:      document.getElementById('es-emplacement').value.trim() || null,
     type_produit:     document.getElementById('es-type-produit').value || null,
     reference_client: document.getElementById('es-reference-client').value.trim() || null,

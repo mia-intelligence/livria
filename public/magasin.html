@@ -323,6 +323,13 @@
       <button class="mag-chip"        data-f="en-cours"   onclick="setMagFilter('en-cours')">En cours</button>
       <button class="mag-chip"        data-f="pret"       onclick="setMagFilter('pret')">Prêt</button>
     </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center" id="mag-produits">
+      <span style="font-size:11px;font-weight:600;color:var(--ink-mute);text-transform:uppercase;letter-spacing:.04em;margin-right:2px">Produit</span>
+      <button class="mag-chip active" data-p="ALL"   onclick="setMagProduit('ALL')">Tous</button>
+      <button class="mag-chip"        data-p="PVC"   onclick="setMagProduit('PVC')"   title="Commandes PVC (les commandes mixtes PVC + ALU sont incluses)">PVC</button>
+      <button class="mag-chip"        data-p="ALU"   onclick="setMagProduit('ALU')"   title="Commandes ALU (les commandes mixtes PVC + ALU sont incluses)">ALU</button>
+      <button class="mag-chip"        data-p="MIXTE" onclick="setMagProduit('MIXTE')" title="Commandes mixtes PVC + ALU uniquement">Mixte</button>
+    </div>
   </div>
 
   <!-- STOPS LIST (jour) -->
@@ -357,7 +364,7 @@
 
   <div class="field" style="margin-bottom:16px">
     <label>Nombre de colis <span style="font-weight:400;text-transform:none;letter-spacing:0">— requis pour valider</span></label>
-    <input type="number" id="prep-colis" min="1" placeholder="Ex : 3">
+    <input type="number" id="prep-colis" min="0" inputmode="numeric" placeholder="Ex : 3 (0 si rien à charger)">
   </div>
 
   <div class="field" style="margin-bottom:16px">
