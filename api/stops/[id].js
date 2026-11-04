@@ -79,7 +79,18 @@ module.exports = async function handler(req, res) {
 
     // Champs magasin — seul le rôle MAGASIN (et ADMIN) peut les modifier
     if (['MAGASIN', 'ADMIN'].includes(role)) {
-      if (nombre_colis !== undefined)          updates.nombre_colis          = nombre_colis;
+      // Entier >= 0 ou null : 0 est une valeur valide (rien à charger).
+      if (nombre_colis !== undefined) {
+        if (nombre_colis === null || nombre_colis === '') {
+          updates.nombre_colis = null;
+        } else {
+          const n = parseInt(nombre_colis, 10);
+          if (Number.isNaN(n) || n < 0) {
+            return res.status(400).json({ error: 'nombre_colis invalide' });
+          }
+          updates.nombre_colis = n;
+        }
+      }
       if (emplacement !== undefined)           updates.emplacement           = emplacement;
       if (photo_url !== undefined)             updates.photo_url             = photo_url;
       if (commentaire_magasin !== undefined)   updates.commentaire_magasin   = commentaire_magasin;

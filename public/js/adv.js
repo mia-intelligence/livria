@@ -399,6 +399,11 @@ async function masquerArc(i) {
   }
 }
 
+// Un nombre de colis est renseigné dès qu'il est saisi, y compris 0.
+function hasColis(s) {
+  return s.nombre_colis !== null && s.nombre_colis !== undefined;
+}
+
 function affaireRowHTML(s, compact) {
   const societeLivraison = s.societe_livraison || 'ATRIAL';
 
@@ -406,13 +411,13 @@ function affaireRowHTML(s, compact) {
   let magasinLine = '';
   if (s.magasin_valide) {
     const parts = [];
-    if (s.nombre_colis) parts.push(`${s.nombre_colis} colis`);
+    if (hasColis(s)) parts.push(`${s.nombre_colis} colis`);
     if (s.emplacement)  parts.push(s.emplacement);
     magasinLine = `<div style="display:inline-flex;align-items:center;gap:5px;margin-top:4px">
       <span style="width:7px;height:7px;border-radius:50%;background:#3DBE7A;flex-shrink:0"></span>
       <span style="font-size:12px;color:#2E8F8F;font-weight:600">Magasin prêt${parts.length ? ' · ' + esc(parts.join(' · ')) : ''}</span>
     </div>`;
-  } else if (s.nombre_colis) {
+  } else if (hasColis(s)) {
     magasinLine = `<div style="font-size:12px;color:#E8A838;margin-top:4px">⏳ Magasin en cours · ${s.nombre_colis} colis</div>`;
   } else {
     magasinLine = `<div style="font-size:12px;color:var(--ink-mute);margin-top:4px">⏳ En attente de préparation magasin</div>`;
@@ -733,14 +738,14 @@ function renderTournee() {
     // Colonne magasin
     let magasinCell = '';
     if (s.magasin_valide) {
-      const colis = s.nombre_colis ? `${s.nombre_colis} colis` : '';
+      const colis = hasColis(s) ? `${s.nombre_colis} colis` : '';
       const emp   = s.emplacement  ? s.emplacement              : '';
       const info  = [colis, emp].filter(Boolean).join(' · ');
       magasinCell = `<span style="display:inline-flex;align-items:center;gap:5px">
         <span style="width:7px;height:7px;border-radius:50%;background:#3DBE7A;flex-shrink:0"></span>
         <span style="font-size:12px;color:var(--ink-soft)">${esc(info) || 'Prêt'}</span>
       </span>`;
-    } else if (s.nombre_colis) {
+    } else if (hasColis(s)) {
       magasinCell = `<span style="font-size:12px;color:#E8A838">En cours</span>`;
     } else {
       magasinCell = `<span style="font-size:12px;color:var(--ink-mute)">—</span>`;
@@ -1190,7 +1195,7 @@ function ficheHistoriqueHTML(s) {
     ? `Préparation validée${s.magasin_valide_at ? ' le ' + fmtDateHeureFr(s.magasin_valide_at) : ''}`
     : 'Préparation non validée';
   const colis = [
-    s.nombre_colis ? `${s.nombre_colis} colis préparés` : '',
+    hasColis(s) ? `${s.nombre_colis} colis préparés` : '',
     s.colis_livres !== null && s.colis_livres !== undefined ? `${s.colis_livres} colis livrés` : '',
     s.emplacement ? `Emplacement ${esc(s.emplacement)}` : '',
   ].filter(Boolean).join(' · ');

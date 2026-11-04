@@ -16,6 +16,22 @@ let weekAnchor = startOfWeek(new Date()); // lundi de la semaine affichée
 // restent ceux de l'onglet entier.
 let magSearch = '';
 let magFilter = 'ALL';   // 'ALL' | 'a-preparer' | 'en-cours' | 'pret'
+// Filtre produit : 'PVC' et 'ALU' incluent les commandes MIXTE (elles
+// contiennent les deux et doivent être préparées par les deux ateliers).
+let magProduit = 'ALL';  // 'ALL' | 'PVC' | 'ALU' | 'MIXTE'
+
+// Un nombre de colis est renseigné dès qu'il est saisi, y compris 0
+// (commande sans rien à charger : le stop passe quand même par le magasin).
+function hasColis(s) {
+  return s.nombre_colis !== null && s.nombre_colis !== undefined;
+}
+
+function matchProduit(s) {
+  if (magProduit === 'ALL') return true;
+  const tp = s.type_produit || '';
+  if (magProduit === 'MIXTE') return tp === 'MIXTE';
+  return tp === magProduit || tp === 'MIXTE';
+}
 
 function normalise(t) {
   return String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -25,6 +41,7 @@ function stopsVisibles() {
   const q = normalise(magSearch).trim();
   return stops.filter(s => {
     if (magFilter !== 'ALL' && getMagasinStatus(s) !== magFilter) return false;
+    if (!matchProduit(s)) return false;
     if (!q) return true;
     return normalise([s.societe, s.numero_affaire, s.reference_client, s.adresse].join(' ')).includes(q);
   });
@@ -38,6 +55,12 @@ function onMagSearch(v) {
 function setMagFilter(f) {
   magFilter = f;
   document.querySelectorAll('#mag-filtres .mag-chip').forEach(c => c.classList.toggle('active', c.dataset.f === f));
+  if (activeTab === 'week') renderWeek(); else renderList();
+}
+
+function setMagProduit(p) {
+  magProduit = p;
+  document.querySelectorAll('#mag-produits .mag-chip').forEach(c => c.classList.toggle('active', c.dataset.p === p));
   if (activeTab === 'week') renderWeek(); else renderList();
 }
 
@@ -215,7 +238,7 @@ function weekCard(s) {
 
   const tags = [];
   if (s.type_produit)  tags.push(`<span class="wk-tag">${esc(s.type_produit)}</span>`);
-  if (s.nombre_colis)  tags.push(`<span class="wk-tag colis">${s.nombre_colis} colis</span>`);
+  if (hasColis(s))     tags.push(`<span class="wk-tag colis">${s.nombre_colis} colis</span>`);
   if (s.emplacement)   tags.push(`<span class="wk-tag">${esc(s.emplacement)}</span>`);
   if ((s.stop_photos || []).length) tags.push(`<span class="wk-tag">📷 ${s.stop_photos.length}</span>`);
   if (ms === 'en-cours') tags.push('<span class="wk-tag draft">Brouillon</span>');
@@ -244,7 +267,7 @@ function updateCounts() {
 // ── Render list ───────────────────────────────────────────────
 function getMagasinStatus(s) {
   if (s.magasin_valide === true)                             return 'pret';
-  if (!s.magasin_valide && s.nombre_colis)                   return 'en-cours';
+  if (!s.magasin_valide && hasColis(s))                      return 'en-cours';
   return 'a-preparer';
 }
 
@@ -285,7 +308,7 @@ function renderList() {
 
     let footer = '';
     if (ms === 'pret') {
-      const colisLabel = s.nombre_colis ? `${s.nombre_colis} colis` : '';
+      const colisLabel = hasColis(s) ? `${s.nombre_colis} colis` : '';
       const empLabel   = s.emplacement  ? s.emplacement             : '';
       const pillText   = [colisLabel, empLabel].filter(Boolean).join(' · ');
       const photoCnt   = (s.stop_photos || []).length;
@@ -344,7 +367,7 @@ function openPrepSheet(id) {
   ].filter(Boolean).join(' · ');
   document.getElementById('prep-meta').textContent = meta;
 
-  document.getElementById('prep-colis').value       = stop.nombre_colis || '';
+  document.getElementById('prep-colis').value       = hasColis(stop) ? String(stop.nombre_colis) : '';
   document.getElementById('prep-emplacement').value = stop.emplacement  || '';
   document.getElementById('prep-commentaire').value = stop.commentaire_magasin || '';
 
@@ -439,15 +462,16 @@ async function persistPrep(validate) {
 
   errEl.style.display = 'none';
 
+  // 0 est une valeur valide (rien à charger pour ce stop).
   const colisNum = colisVal ? parseInt(colisVal, 10) : null;
 
-  if (validate && (!colisNum || colisNum < 1)) {
-    errEl.textContent    = 'Le nombre de colis est obligatoire pour valider (minimum 1). Utilisez « Enregistrer » pour reprendre plus tard.';
+  if (colisVal && (Number.isNaN(colisNum) || colisNum < 0)) {
+    errEl.textContent    = 'Le nombre de colis doit être un entier positif ou nul (0 accepté).';
     errEl.style.display  = 'block';
     return;
   }
-  if (colisVal && (Number.isNaN(colisNum) || colisNum < 1)) {
-    errEl.textContent    = 'Le nombre de colis doit être un entier supérieur à 0.';
+  if (validate && colisNum === null) {
+    errEl.textContent    = 'Le nombre de colis est obligatoire pour valider (saisissez 0 s\'il n\'y a rien à charger). Utilisez « Enregistrer » pour reprendre plus tard.';
     errEl.style.display  = 'block';
     return;
   }

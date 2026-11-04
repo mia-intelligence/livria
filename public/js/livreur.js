@@ -307,14 +307,14 @@ function renderStopsList() {
       : '';
 
     const extras = [];
-    if (s.nombre_colis) {
+    if (hasColis(s)) {
       extras.push(`<span style="display:inline-flex;align-items:center;gap:5px;background:var(--turquoise-soft);color:var(--turquoise-dark);border-radius:99px;padding:2px 10px;font-size:11.5px;font-weight:600;">${esc(String(s.nombre_colis))} colis</span>`);
     }
     if (s.emplacement) {
       extras.push(`<span style="font-size:11.5px;color:var(--ink-mute);">${esc(s.emplacement)}</span>`);
     }
     if (s.colis_livres !== null && s.colis_livres !== undefined) {
-      const ecart = s.nombre_colis && s.colis_livres !== s.nombre_colis;
+      const ecart = hasColis(s) && s.colis_livres !== s.nombre_colis;
       extras.push(`<span style="display:inline-flex;align-items:center;gap:5px;background:${ecart ? 'var(--warn-soft)' : 'var(--status-done-bg)'};color:${ecart ? '#8A5A12' : 'var(--status-done-fg)'};border-radius:99px;padding:2px 10px;font-size:11.5px;font-weight:600;">${ecart ? '⚠ ' : '✓ '}${esc(String(s.colis_livres))} livré${s.colis_livres > 1 ? 's' : ''}</span>`);
     }
 
@@ -607,12 +607,18 @@ async function uploadDepotPhotos(stopId) {
   return echecs;
 }
 
+
+// Un nombre de colis est renseigné dès qu'il est saisi, y compris 0.
+function hasColis(s) {
+  return s.nombre_colis !== null && s.nombre_colis !== undefined;
+}
+
 function renderMagasinInfo(stop) {
   const container = document.getElementById('sheet-magasin-info');
   const photos = photosColissage(stop);
   const items = [];
 
-  if (stop.nombre_colis) {
+  if (hasColis(stop)) {
     items.push(`<span style="background:var(--turquoise-soft);color:var(--turquoise-dark);border-radius:99px;padding:2px 12px;font-size:12px;font-weight:700;">${stop.nombre_colis} colis</span>`);
   }
   if (stop.emplacement) {
@@ -643,7 +649,7 @@ function renderColisConfirm(stop) {
   const el = document.getElementById('sheet-colis-confirm');
   const cb = document.getElementById('cb-colis-confirme');
 
-  if (stop.magasin_valide && stop.nombre_colis && stop.statut === 'A_LIVRER') {
+  if (stop.magasin_valide && stop.nombre_colis > 0 && stop.statut === 'A_LIVRER') {
     const empText = stop.emplacement ? ` (${stop.emplacement})` : '';
     document.getElementById('cb-colis-label').textContent =
       `J'ai bien pris les ${stop.nombre_colis} colis${empText}`;
@@ -678,7 +684,7 @@ function renderColisLivres(stop) {
   // compris quand l'information manque : le livreur doit savoir ce qui
   // était attendu, ou qu'il n'y a rien d'annoncé.
   prep.style.display = 'block';
-  if (stop.nombre_colis) {
+  if (hasColis(stop)) {
     const bits = [`<b style="color:var(--turquoise-dark)">${stop.nombre_colis} colis à livrer</b>`];
     if (stop.emplacement) bits.push(esc(stop.emplacement));
     prep.innerHTML = `Annoncé par le magasin : ${bits.join(' · ')}`;
@@ -690,7 +696,7 @@ function renderColisLivres(stop) {
                    + 'le nombre de colis pour ce stop.</span>';
   }
 
-  att.textContent = stop.nombre_colis ? ` sur les ${stop.nombre_colis} prévus` : '';
+  att.textContent = hasColis(stop) ? ` sur les ${stop.nombre_colis} prévus` : '';
   inp.value = (stop.colis_livres ?? '') === '' ? '' : String(stop.colis_livres);
   el.style.display = 'block';
   renderColisEcart(stop);
@@ -710,7 +716,7 @@ function renderColisEcart(stop) {
   const box = document.getElementById('colis-livres-ecart');
   const val = document.getElementById('in-colis-livres').value.trim();
 
-  if (!val || !stop.nombre_colis) { box.style.display = 'none'; return; }
+  if (!val || !hasColis(stop)) { box.style.display = 'none'; return; }
 
   const n = parseInt(val, 10);
   if (Number.isNaN(n) || n === stop.nombre_colis) { box.style.display = 'none'; return; }
@@ -756,7 +762,7 @@ async function saveColisLivres(id) {
 function renderStatusActions(stop) {
   const container = document.getElementById('status-actions');
   const cbChecked = document.getElementById('cb-colis-confirme')?.checked;
-  const needsCheck = stop.magasin_valide && stop.nombre_colis && stop.statut === 'A_LIVRER';
+  const needsCheck = stop.magasin_valide && stop.nombre_colis > 0 && stop.statut === 'A_LIVRER';
 
   // La phrase « J'ai livré ___ colis » vaut validation de la livraison :
   // sans nombre saisi, on ne peut pas clôturer le stop.
