@@ -1,7 +1,7 @@
 const { getDB, getAdminDB } = require('../../lib/db');
 const { requireAuth } = require('../../lib/auth');
 const { geocoder } = require('../../lib/geo');
-const { lireSorties } = require('../../lib/sorties');
+const { lireSorties, modifierDateSortie, historiqueDates } = require('../../lib/sorties');
 
 // Colonnes de arc_commandes utiles au stop : identification, coordonnées de
 // facturation (adresse de livraison par défaut), règlement (le livreur
@@ -168,6 +168,17 @@ module.exports = async function handler(req, res) {
       if (!['ADV', 'ADMIN'].includes(role)) return res.status(403).json({ error: 'Accès refusé' });
       try {
         return res.status(200).json(await lireSorties(db, req.query.from, req.query.to));
+      } catch (e) {
+        return res.status(e.status || 500).json({ error: e.message });
+      }
+    }
+
+    // Planning des sorties (bêta) : historique des dates d'un stop
+    // ?sorties=historique&stop_id=...
+    if (req.query.sorties === 'historique') {
+      if (!['ADV', 'ADMIN'].includes(role)) return res.status(403).json({ error: 'Accès refusé' });
+      try {
+        return res.status(200).json(await historiqueDates(db, String(req.query.stop_id || '')));
       } catch (e) {
         return res.status(e.status || 500).json({ error: e.message });
       }
@@ -361,6 +372,18 @@ module.exports = async function handler(req, res) {
     const { data, error } = await query;
     if (error) return res.status(500).json({ error: error.message });
     return res.status(200).json(await attacheArc(db, data));
+  }
+
+  // Planning des sorties (bêta) : modifier la date de sortie d'un stop
+  // POST ?sorties=date  { stop_id, date }  — ADV et ADMIN, tracé dans activity_logs
+  if (req.method === 'POST' && req.query.sorties === 'date') {
+    if (!['ADV', 'ADMIN'].includes(role)) return res.status(403).json({ error: 'Accès refusé' });
+    const { stop_id, date } = req.body || {};
+    try {
+      return res.status(200).json(await modifierDateSortie(db, stop_id, date, session.users.identifiant));
+    } catch (e) {
+      return res.status(e.status || 500).json({ error: e.message });
+    }
   }
 
   // Masquer / réafficher une commande ARC dans « Affaires à planifier » :

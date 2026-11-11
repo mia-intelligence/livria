@@ -150,3 +150,12 @@ a { color: var(--turquoise); }
 .so-confirm { background: #243333; border: 1px solid var(--turquoise); border-radius: 6px; padding: 10px; font-size: 13px; display: flex; flex-direction: column; gap: 8px; }
 .so-confirm > div { display: flex; gap: 8px; }
 .so-alerte { font-size: 13px; color: #ff8a80; }
+
+/* ── Historique et message de confirmation ── */
+.so-histo { font-size: 13px; color: var(--texte-2); }
+.so-annonce { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 20; background: var(--turquoise); color: var(--fond); font-size: 14px; font-weight: 700; padding: 12px 18px; border-radius: 8px; max-width: 90vw; }
+.so-annonce[hidden] { display: none; }
+.so-primaire[hidden] { display: none; }
+/* Jour en cours : le repère passe au-dessus du nom du jour pour ne rien serrer */
+.so-jour.aujourdhui .so-jour-haut { flex-wrap: wrap; row-gap: 4px; }
+.so-jour.aujourdhui .so-tag { flex-basis: 100%; width: max-content; flex-grow: 0; align-self: flex-start; max-width: max-content; }

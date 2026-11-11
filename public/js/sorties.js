@@ -238,7 +238,97 @@
     $('voile').hidden = false;
     $('fiche-fermer').addEventListener('click', fermerFiche);
     $('fiche').focus();
-    document.dispatchEvent(new CustomEvent('sorties:fiche', { detail: s }));
+    if (s.date_modifiable) installerDate(s);
+    if (s.source === 'stop') chargerHistorique(s);
+  }
+
+  // ── Modification de la date de sortie (affaire qui a un stop) ─────────────
+  const estWeekEnd = v => { const j = depuisIso(v).getDay(); return j === 0 || j === 6; };
+
+  function installerDate(s) {
+    const zone = $('fiche-date');
+    zone.innerHTML =
+      '<label class="so-champ" for="date-nouvelle">Nouvelle date de sortie'
+      + '<input type="date" id="date-nouvelle" value="' + esc(s.date) + '" aria-describedby="date-aide"></label>'
+      + '<span class="so-note" id="date-aide">Les samedis et dimanches sont refusés.</span>'
+      + '<span class="so-alerte" id="date-erreur" role="alert"></span>'
+      + '<div id="date-confirm"></div>'
+      + '<button type="button" class="so-primaire" id="date-enregistrer">Modifier la date</button>';
+
+    const champ = $('date-nouvelle'), err = $('date-erreur'), conf = $('date-confirm'), bouton = $('date-enregistrer');
+    const annuler = () => { conf.innerHTML = ''; bouton.hidden = false; };
+    champ.addEventListener('input', () => { err.textContent = ''; annuler(); });
+
+    // 1er clic : contrôle, puis demande de confirmation (ancienne et nouvelle date)
+    bouton.addEventListener('click', () => {
+      const v = champ.value;
+      err.textContent = '';
+      if (!v)             { err.textContent = 'Choisissez une date.'; return; }
+      if (v === s.date)   { err.textContent = 'La nouvelle date est identique à l’ancienne.'; return; }
+      if (estWeekEnd(v))  { err.textContent = 'Les samedis et dimanches sont refusés.'; return; }
+      bouton.hidden = true;
+      conf.innerHTML = '<div class="so-confirm"><span>Confirmer le changement de date ?<br>Ancienne date : <strong>' + esc(dateLongue(s.date))
+        + '</strong><br>Nouvelle date : <strong>' + esc(dateLongue(v)) + '</strong><br>La modification sera enregistrée dans l’historique avec votre nom.</span>'
+        + '<div><button type="button" class="so-primaire" id="date-oui">Confirmer</button>'
+        + '<button type="button" class="so-btn" id="date-non">Annuler</button></div></div>';
+      $('date-non').addEventListener('click', () => { annuler(); bouton.focus(); });
+      $('date-oui').addEventListener('click', () => enregistrerDate(s, v));
+      $('date-oui').focus();
+    });
+  }
+
+  // 2e clic : enregistrement. Le serveur refait tous les contrôles.
+  async function enregistrerDate(s, nouvelle) {
+    const oui = $('date-oui'), err = $('date-erreur');
+    oui.disabled = true; oui.textContent = 'Enregistrement…';
+    try {
+      const res = await fetch('/api/stops?sorties=date', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stop_id: s.stop_id, date: nouvelle }),
+      });
+      if (res.status === 401) { window.location.href = '/'; return; }
+      const corps = await res.json();
+      if (!res.ok) throw new Error(corps.error || 'Erreur ' + res.status);
+      const cle = s.cle;
+      await charger();                       // la sortie change de colonne (ou sort de la semaine)
+      if (parCle[cle]) ouvrirFiche(cle); else fermerFiche();
+      annoncer('Date de sortie modifiée : ' + dateLongue(nouvelle) + '.'
+        + (corps.tracee ? '' : ' Attention : la trace n’a pas pu être enregistrée.'));
+    } catch (e) {
+      $('date-confirm').innerHTML = '';
+      $('date-enregistrer').hidden = false;
+      err.textContent = 'Date non modifiée : ' + e.message;
+    }
+  }
+
+  // Message de confirmation, lu aussi par les lecteurs d'écran
+  function annoncer(texte) {
+    const zone = $('annonce');
+    zone.textContent = texte;
+    zone.hidden = false;
+    clearTimeout(annoncer.minuteur);
+    annoncer.minuteur = setTimeout(() => { zone.hidden = true; }, 6000);
+  }
+
+  // Historique des modifications de date (lu dans activity_logs)
+  async function chargerHistorique(s) {
+    const bloc = document.createElement('section');
+    bloc.innerHTML = '<h3>HISTORIQUE DES DATES</h3><span class="so-note">Chargement…</span>';
+    $('fiche').appendChild(bloc);
+    try {
+      const res = await fetch('/api/stops?sorties=historique&stop_id=' + encodeURIComponent(s.stop_id));
+      const lignes = await res.json();
+      if (!res.ok) throw new Error(lignes.error || 'Erreur ' + res.status);
+      if (ouverte !== s.cle) return;         // la fiche a changé entre-temps
+      const jour = v => v ? depuisIso(v).toLocaleDateString('fr-FR') : 'sans date';
+      bloc.innerHTML = '<h3>HISTORIQUE DES DATES</h3>' + (lignes.length
+        ? lignes.map(l => { const d = new Date(l.le);
+            return '<span class="so-histo">' + esc(d.toLocaleDateString('fr-FR')) + ' · ' + deux(d.getHours()) + ':' + deux(d.getMinutes())
+              + ' · ' + esc(l.par || 'inconnu') + ' · ' + esc(jour(l.ancienne_date)) + ' → ' + esc(jour(l.nouvelle_date)) + '</span>'; }).join('')
+        : '<span class="so-note">Aucune modification depuis cet écran.</span>');
+    } catch (e) {
+      bloc.innerHTML = '<h3>HISTORIQUE DES DATES</h3><span class="so-note">Historique indisponible.</span>';
+    }
   }
 
   function fermerFiche() {
