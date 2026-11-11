@@ -159,3 +159,67 @@ a { color: var(--turquoise); }
 /* Jour en cours : le repère passe au-dessus du nom du jour pour ne rien serrer */
 .so-jour.aujourdhui .so-jour-haut { flex-wrap: wrap; row-gap: 4px; }
 .so-jour.aujourdhui .so-tag { flex-basis: 100%; width: max-content; flex-grow: 0; align-self: flex-start; max-width: max-content; }
+
+/* ══ Affichage mural (1920 × 1080, lecture seule, sans défilement) ═══════════
+   La scène fait toujours 1920 × 1080 ; elle est mise à l'échelle de l'écran
+   par sorties-mural.js (un écran 4K affiche donc la même chose, en plus net). */
+body.mural { overflow: hidden; height: 100vh; min-height: 0; display: block; }
+.mu-scene { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; overflow: hidden; padding: 12px 14px 8px; display: flex; flex-direction: column; gap: 8px; }
+.mu-entete { height: 54px; flex: none; display: flex; align-items: center; gap: 18px; }
+.mu-entete h1 { margin: 0; font-family: Manrope, Inter, sans-serif; font-size: 26px; font-weight: 800; white-space: nowrap; }
+.mu-entete .so-logo { width: 40px; height: 40px; flex: none; }
+.mu-nb { font-size: 15px; color: var(--texte-3); white-space: nowrap; }
+.mu-nav { display: flex; align-items: center; gap: 6px; }
+.mu-nav .so-btn { height: 48px; min-width: 48px; font-size: 15px; }
+.mu-nav .so-btn.fleche { font-size: 24px; }
+.mu-nav .so-btn:disabled { opacity: .35; cursor: default; }
+.mu-choix { display: flex; gap: 4px; margin-left: 10px; background: var(--fond-3); border: 1px solid var(--trait-2); border-radius: 8px; padding: 4px; }
+.mu-choix button { height: 40px; padding: 0 14px; border: 0; border-radius: 6px; background: transparent; color: var(--texte-2); font-size: 15px; font-weight: 700; cursor: pointer; }
+.mu-choix button[aria-pressed="true"] { background: var(--turquoise); color: var(--fond); }
+.mu-kpis { margin-left: auto; display: flex; align-items: center; gap: 26px; }
+.mu-kpi { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
+.mu-kpi b { font-size: 32px; font-weight: 800; }
+.mu-kpi span { font-size: 14px; color: var(--texte-3); }
+.mu-kpi.vert b { color: var(--vert-texte); } .mu-kpi.bleu b { color: var(--turquoise-clair); } .mu-kpi.rouge b { color: #ff8a80; }
+.mu-heure { display: flex; flex-direction: column; align-items: flex-end; padding-left: 22px; border-left: 1px solid var(--trait-2); white-space: nowrap; }
+.mu-heure b { font-size: 32px; font-weight: 800; line-height: 1; }
+.mu-heure span { font-size: 12px; color: var(--texte-3); }
+.mu-heure span.erreur { color: #ff8a80; font-weight: 700; }
+
+.mu-jours { flex: 1; min-height: 0; display: grid; gap: 10px; }
+.mu-jour { min-height: 0; min-width: 0; display: flex; flex-direction: column; gap: 4px; background: var(--fond-2); border: 1px solid #1c2929; border-radius: 8px; padding: 6px; }
+.mu-jour.aujourdhui { background: #132626; border-color: var(--turquoise); }
+.mu-jour-haut { display: flex; align-items: baseline; gap: 8px; padding: 0 4px; height: 28px; flex: none; }
+.mu-jour-haut .tag { font-size: 14px; font-weight: 800; background: var(--trait-2); color: var(--texte); padding: 2px 6px; border-radius: 3px; white-space: nowrap; }
+.mu-jour.aujourdhui .tag { background: var(--turquoise); color: var(--fond); }
+.mu-jour-haut h2 { margin: 0; font-size: 22px; font-weight: 800; white-space: nowrap; }
+.mu-jour-haut .nb { margin-left: auto; font-size: 22px; font-weight: 800; }
+.mu-jour-haut .lib { font-size: 13px; color: var(--texte-2); }
+.mu-totaux { font-size: 14px; color: var(--texte-3); padding: 0 4px; height: 18px; flex: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mu-cols { flex: 1; min-height: 0; display: grid; gap: 6px; }
+.mu-col { min-height: 0; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.mu-bloc { min-width: 0; display: flex; flex-direction: column; gap: 3px; background: #0e1717; border-radius: 6px; padding: 3px; overflow: hidden; }
+.mu-bloc-haut { height: 24px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 3px; border-bottom: 1px solid #243333; }
+.mu-bloc-haut span { font-size: 13px; font-weight: 800; letter-spacing: .06em; color: var(--turquoise-clair); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mu-bloc-haut b { font-size: 15px; font-weight: 800; }
+.mu-cartes { display: grid; gap: 3px; align-content: start; }
+.mu-vide { font-size: 14px; color: var(--texte-off); text-align: center; padding: 14px 0; }
+
+.mu-carte { height: 54px; min-width: 0; background: var(--carte); border-left: 4px solid var(--carte); border-radius: 4px; padding: 3px 5px; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; }
+.mu-carte.prete { border-left-color: var(--vert); }
+.mu-carte.retard { border-left-color: var(--rouge); background: var(--rouge-fond); }
+.mu-carte.realisee { border-left-color: var(--gris-bande); opacity: .5; }
+.mu-carte.reste { line-height: 1.15; align-items: center; justify-content: center; font-size: 14px; font-weight: 800; color: #ffd08a; border-left-color: #ffb86b; text-align: center; }
+.mu-c1 { height: 18px; line-height: 18px; display: flex; align-items: center; gap: 4px; min-width: 0; }
+.mu-c1 .vl { flex: none; font-size: 10px; font-weight: 800; border: 1px solid #8fa3a3; border-radius: 3px; padding: 0 3px; }
+.mu-c1 .client { font-family: Manrope, Inter, sans-serif; font-size: 15px; font-weight: 800; color: var(--turquoise-clair); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1 auto; }
+.mu-c1 .chantier { font-size: 12px; color: #b9caca; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1 10 0; }
+.mu-c2 { height: 16px; line-height: 16px; font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mu-c3 { height: 14px; line-height: 14px; display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 800; white-space: nowrap; overflow: hidden; }
+.mu-c3 .statuts { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--texte-2); }
+.mu-c3 .ok { color: var(--vert-texte); } .mu-c3 .cours { color: var(--turquoise-clair); } .mu-c3 .pt { color: var(--texte-off); }
+.mu-c3 .ret { margin-left: auto; flex: none; background: #c0392b; color: #fff; border-radius: 3px; padding: 0 3px; }
+
+.mu-pied { height: 24px; flex: none; display: flex; align-items: center; gap: 20px; font-size: 13px; color: var(--texte-2); white-space: nowrap; overflow: hidden; }
+.mu-pied .rep { display: flex; align-items: center; gap: 6px; }
+.mu-pied .rep i { width: 5px; height: 16px; }
