@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LIVRIAL — Planning des sorties (bêta)</title>
+  <link rel="icon" href="/images/atrial-logo.jpeg" type="image/jpeg">
+  <meta name="theme-color" content="#0b1212">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/sorties.css">
+</head>
+<body>
+
+  <header class="so-entete">
+    <div class="so-marque">
+      <div class="so-logo" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0b1212" stroke-width="3" stroke-linecap="round"><path d="M5 19C5 11 9 6 19 5"/><path d="M12 19c0-4 2-6 7-7"/></svg>
+      </div>
+      <span class="so-nom">LIVRIAL</span>
+      <span class="so-sep" aria-hidden="true"></span>
+      <h1 class="so-titre">PLANNING<br>DES SORTIES</h1>
+      <span class="so-beta">Bêta</span>
+    </div>
+    <div class="so-kpis">
+      <div id="kpis" class="so-kpis" aria-live="polite"></div>
+      <div class="so-heure">
+        <b id="horloge">--:--</b>
+        <span id="maj">Chargement…</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="so-barre">
+    <div class="so-periode">
+      <b id="periode-titre">Semaine</b>
+      <span id="periode-detail"></span>
+    </div>
+    <div class="so-nav">
+      <button type="button" class="so-btn fleche" id="btn-prec" aria-label="Semaine précédente">‹</button>
+      <button type="button" class="so-btn" id="btn-auj">Aujourd’hui</button>
+      <button type="button" class="so-btn fleche" id="btn-suiv" aria-label="Semaine suivante">›</button>
+      <a class="so-btn" href="/sorties/mural" target="_blank" rel="noopener">Affichage mural</a>
+      <a class="so-btn" id="btn-retour" href="/adv">Retour à la console</a>
+    </div>
+  </div>
+
+  <main class="so-zone">
+    <div class="so-grille" id="grille">
+      <p class="so-message">Chargement…</p>
+    </div>
+  </main>
+
+  <footer class="so-pied">
+    <div>
+      <span class="rep"><i aria-hidden="true" style="background:#3ccf8e"></i>Prête au départ : FINI, PRÊTE, PL ou VL</span>
+      <span class="rep"><i aria-hidden="true" style="background:#e5534b"></i>Retard (badge RETARD, fond rouge)</span>
+      <span class="rep"><i aria-hidden="true" style="background:#5c6b6b"></i>Sortie réalisée (étiquette estompée)</span>
+      <span>Production : GAGNÉE → APPRO → FAB → FINI</span>
+      <span>Sortie (LIVRIAL) : NON PRÊTE → EN PRÉPARATION → PRÊTE → EN LIVRAISON → LIVRÉE</span>
+      <span>Mode : PL, VL, TRANS. (transporteur), ENLÈV. (enlèvement client)</span>
+    </div>
+    <span class="codes" id="legende-codes"></span>
+  </footer>
+
+  <!-- Fiche latérale d'une sortie -->
+  <div class="so-voile" id="voile" hidden>
+    <aside class="so-fiche" id="fiche" role="dialog" aria-modal="true" aria-labelledby="fiche-titre" tabindex="-1"></aside>
+  </div>
+
+  <!-- Message de confirmation (date modifiée) -->
+  <div class="so-annonce" id="annonce" role="status" aria-live="polite" hidden></div>
+
+  <script src="/js/sorties.js"></script>
+</body>
+</html>

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LIVRIAL — Planning des sorties · Affichage mural (bêta)</title>
+  <link rel="icon" href="/images/atrial-logo.jpeg" type="image/jpeg">
+  <meta name="theme-color" content="#0b1212">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=Manrope:wght@800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/sorties.css">
+</head>
+<body class="mural">
+  <div class="mu-scene" id="scene">
+
+    <header class="mu-entete">
+      <div class="so-logo" aria-hidden="true">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0b1212" stroke-width="3" stroke-linecap="round"><path d="M5 19C5 11 9 6 19 5"/><path d="M12 19c0-4 2-6 7-7"/></svg>
+      </div>
+      <h1>PLANNING DES SORTIES</h1>
+      <span class="so-beta">Bêta</span>
+      <div class="mu-nav">
+        <button type="button" class="so-btn fleche" id="btn-prec" aria-label="Jour précédent">‹</button>
+        <button type="button" class="so-btn" id="btn-auj">Aujourd’hui</button>
+        <button type="button" class="so-btn fleche" id="btn-suiv" aria-label="Jour suivant">›</button>
+        <div class="mu-choix" role="group" aria-label="Nombre de jours affichés">
+          <button type="button" id="btn-3" aria-pressed="true">3 jours</button>
+          <button type="button" id="btn-4" aria-pressed="false">4 jours</button>
+        </div>
+        <button type="button" class="so-btn" id="btn-plein">Plein écran</button>
+      </div>
+      <div class="mu-kpis">
+        <div class="mu-kpis" id="kpis"></div>
+        <div class="mu-heure">
+          <b id="horloge">--:--</b>
+          <span id="maj">Chargement…</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="mu-jours" id="jours"></main>
+
+    <footer class="mu-pied">
+      <span class="rep"><i aria-hidden="true" style="background:#3ccf8e"></i>Prête au départ</span>
+      <span class="rep"><i aria-hidden="true" style="background:#e5534b"></i>Retard (mention RETARD, fond rouge)</span>
+      <span class="rep"><i aria-hidden="true" style="background:#5c6b6b"></i>Sortie réalisée (estompée)</span>
+      <span>VL = véhicule léger (sinon PL)</span>
+      <span>Ligne du bas : Production · Sortie</span>
+      <span>GAG. = gagnée · PRÉPA. = en préparation · EN LIV. = en livraison</span>
+      <span>AUT = autres · VR = volets roulants</span>
+    </footer>
+  </div>
+
+  <script src="/js/sorties-mural.js"></script>
+</body>
+</html>
