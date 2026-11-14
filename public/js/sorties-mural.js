@@ -1,5 +1,5 @@
-/* ── LIVRIAL — Planning des sorties (bêta) : affichage mural ──────────────────
-   Écran 1920 × 1080 en lecture seule, sans défilement. Jours ouvrés glissants
+/* ── LIVRIAL — Planning des sorties (bêta) : vue 3 jours / affichage mural ────
+   Vue principale de l'onglet (/sorties). Écran 1920 × 1080 en lecture seule, sans défilement. Jours ouvrés glissants
    à partir d'aujourd'hui, rafraîchissement automatique toutes les minutes.
    Mêmes données que la vue bureau : /api/stops?sorties=1 (ADV et ADMIN). */
 
@@ -67,6 +67,7 @@
       if (!res.ok) { window.location.href = '/'; return false; }
       const user = await res.json();
       if (!['ADV', 'ADMIN'].includes(user.role)) { window.location.href = '/'; return false; }
+      $('btn-retour').href = user.role === 'ADMIN' ? '/admin' : '/adv';
       return true;
     } catch { window.location.href = '/'; return false; }
   }
@@ -214,7 +215,7 @@
       k(auj.length, 'sorties aujourd’hui')
       + k(auj.filter(s => s.realisee).length, 'réalisées', 'vert')
       + k(auj.filter(s => s.sortie === 'EN_LIVRAISON').length, 'en livraison', 'bleu')
-      + k(sorties.filter(s => s.retard && jours.some(j => j.iso === s.date)).length, 'en retard (jours affichés)', 'rouge');
+      + k(sorties.filter(s => s.retard && jours.some(j => j.iso === s.date)).length, 'en retard', 'rouge');
   }
 
   // ── Démarrage ─────────────────────────────────────────────────────────────

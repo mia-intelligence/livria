@@ -223,3 +223,11 @@ body.mural { overflow: hidden; height: 100vh; min-height: 0; display: block; }
 .mu-pied { height: 24px; flex: none; display: flex; align-items: center; gap: 20px; font-size: 13px; color: var(--texte-2); white-space: nowrap; overflow: hidden; }
 .mu-pied .rep { display: flex; align-items: center; gap: 6px; }
 .mu-pied .rep i { width: 5px; height: 16px; }
+
+/* En-tête du mural : liens « Vue semaine » et « Console » */
+.mu-nav .so-btn { padding: 0 12px; white-space: nowrap; }
+.mu-nav .so-btn.fleche { padding: 0; }
+.mu-entete { gap: 14px; }
+.mu-choix { margin-left: 4px; }
+.mu-choix button { padding: 0 10px; }
+.mu-kpis { gap: 22px; }
