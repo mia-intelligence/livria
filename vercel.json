@@ -4,6 +4,9 @@
     { "source": "/livreur",  "destination": "/livreur.html" },
     { "source": "/adv",      "destination": "/adv.html" },
     { "source": "/admin",    "destination": "/admin.html" },
-    { "source": "/magasin",  "destination": "/magasin.html" }
+    { "source": "/magasin",  "destination": "/magasin.html" },
+    { "source": "/sorties",  "destination": "/sorties-mural.html" },
+    { "source": "/sorties/mural", "destination": "/sorties-mural.html" },
+    { "source": "/sorties/semaine", "destination": "/sorties.html" }
   ]
 }
