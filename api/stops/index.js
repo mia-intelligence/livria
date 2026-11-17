@@ -11,7 +11,7 @@ const ARC_COLS = [
   'societe', 'contact', 'adresse_facturation', 'code_postal', 'ville',
   'telephone_client', 'mobile_client', 'gamme', 'montant_ttc',
   'acompte_present', 'montant_acompte', 'taux_acompte', 'solde_avant_livraison', 'montant_solde',
-  'mode_livraison', 'date_livraison_prevue',
+  'mode_livraison', 'date_livraison_prevue', 'date_sortie_suivi',
 ].join(',');
 
 // Attache à chaque stop les infos de sa commande ARC (clé stops.arc_reference).
