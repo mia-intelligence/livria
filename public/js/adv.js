@@ -171,6 +171,7 @@ const SECTION_TITLES = {
   affaires: 'Affaires à planifier',
   tournee: 'Tournée du jour',
   planning: 'Planning des livraisons',
+  stopsdate: 'Stops par date',
   historique: 'Historique des livraisons'
 };
 
@@ -186,6 +187,7 @@ function showSection(name) {
 
   if (name === 'planning') initPlanning();
   if (name === 'historique' && !historiqueCharge) chargerHistorique();
+  if (name === 'stopsdate') ouvrirStopsDate();
 }
 
 // ── Load stops ─────────────────────────────────────────────────
@@ -1460,3 +1462,198 @@ function esc(str) {
 
 // ── Boot ───────────────────────────────────────────────────────
 init();
+
+/* ── Stops par date ─────────────────────────────────────────────
+   Tous les stops d'une journée, quelle qu'elle soit, avec une fiche de
+   correction. Sert notamment à passer « livré » un stop que le livreur a
+   oublié de valider, à sa date et son heure réelles (c'est ce « Livré le »
+   qui part dans le suivi d'affaires). */
+let stopsDate = [];          // stops de la journée affichée
+let sdStopId = null;         // stop ouvert dans la fiche
+let sdInitial = {};          // valeurs de la fiche à l'ouverture
+
+// Date du jour en heure locale (AAAA-MM-JJ)
+function sdAujourdhui() {
+  return versChampLocalSD(new Date()).slice(0, 10);
+}
+
+// Valeur d'un champ datetime-local (heure locale du navigateur, à la minute)
+function versChampLocalSD(d) {
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function ouvrirStopsDate() {
+  const inp = document.getElementById('sd-date');
+  if (!inp.value) inp.value = sdAujourdhui();
+  chargerStopsDate();
+}
+
+async function chargerStopsDate() {
+  const date = document.getElementById('sd-date').value;
+  if (!date) return;
+  document.getElementById('sd-lead').textContent = 'Chargement…';
+  try {
+    const res = await fetch(`/api/stops?date=${encodeURIComponent(date)}`);
+    if (res.status === 401) { window.location.href = '/'; return; }
+    if (!res.ok) throw new Error();
+    stopsDate = await res.json();
+    afficherStopsDate();
+  } catch {
+    document.getElementById('sd-lead').textContent = 'Erreur de chargement. Réessayez.';
+  }
+}
+
+function afficherStopsDate() {
+  const date = document.getElementById('sd-date').value;
+  const jour = date
+    ? new Date(date + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+    : '';
+  const n = stopsDate.length;
+  const livres = stopsDate.filter(s => s.statut === 'LIVRE').length;
+  document.getElementById('sd-lead').textContent =
+    `${n} stop${n > 1 ? 's' : ''} · ${livres} livré${livres > 1 ? 's' : ''} · ${jour}`;
+
+  const tbody = document.getElementById('sd-tbody');
+  if (!n) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--ink-mute)">Aucun stop ce jour.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = stopsDate.map((s, i) => {
+    const sl = s.societe_livraison || 'ATRIAL';
+    return `
+    <tr>
+      <td class="muted">${i + 1}</td>
+      <td class="strong">${esc(s.societe)}</td>
+      <td class="muted">${s.numero_affaire ? esc(s.numero_affaire) : '—'}${s.reference_client ? `<div style="font-size:11px;font-weight:700;color:var(--turquoise-dark, #2E7F7F)">${esc(s.reference_client)}</div>` : ''}</td>
+      <td><span class="type-badge ${sl.toLowerCase()}">${TYPE_LABEL[sl] || sl}</span></td>
+      <td class="muted">${esc(s.tournee || '—')}</td>
+      <td><span class="pill ${STATUS_CLASS[s.statut] || 'todo'}">${STATUS_LABEL[s.statut] || s.statut}</span></td>
+      <td class="muted" style="white-space:nowrap">${s.livre_le ? fmtDateHeureFr(s.livre_le) : '—'}</td>
+      <td>${s.magasin_valide ? '✅' : '—'}</td>
+      <td><button class="btn sm" onclick="ouvrirStopDate('${s.id}')">✎ Modifier</button></td>
+    </tr>`;
+  }).join('');
+}
+
+// Valeurs de la fiche, telles qu'elles seront comparées à l'enregistrement
+function lireFicheStopDate() {
+  const v = id => document.getElementById(id).value;
+  return {
+    societe:          v('sd-societe').trim(),
+    adresse:          v('sd-adresse').trim(),
+    telephone:        v('sd-telephone').trim(),
+    date_tournee:     v('sd-date-tournee'),
+    statut:           v('sd-statut'),
+    livre_le:         v('sd-livre-le'),
+    tournee:          v('sd-tournee'),
+    vehicule:         v('sd-vehicule'),
+    type_produit:     v('sd-type-produit'),
+    reference_client: v('sd-reference-client').trim(),
+    groupe_livraison: v('sd-groupe').trim(),
+  };
+}
+
+function ouvrirStopDate(id) {
+  const s = stopsDate.find(x => x.id === id);
+  if (!s) return;
+  sdStopId = id;
+  document.getElementById('sd-desc').textContent = `${s.societe} — ${s.numero_affaire || 'sans affaire'}`;
+  document.getElementById('sd-error').style.display = 'none';
+
+  const set = (el, val) => { document.getElementById(el).value = val; };
+  set('sd-societe', s.societe || '');
+  set('sd-adresse', s.adresse || '');
+  set('sd-telephone', s.telephone || '');
+  set('sd-date-tournee', s.date_tournee ? s.date_tournee.slice(0, 10) : '');
+  set('sd-statut', s.statut || 'A_LIVRER');
+  set('sd-livre-le', s.livre_le ? versChampLocalSD(new Date(s.livre_le)) : '');
+  set('sd-tournee', s.tournee || '');
+  set('sd-vehicule', s.vehicule || '');
+  set('sd-type-produit', s.type_produit || '');
+  set('sd-reference-client', s.reference_client || '');
+  set('sd-groupe', s.groupe_livraison || '');
+
+  // Photographie de la fiche avant toute proposition automatique : seul ce
+  // qui en diffère à l'enregistrement est envoyé au serveur.
+  sdInitial = lireFicheStopDate();
+  majChampLivreLeSD();
+  document.getElementById('sd-modal').classList.remove('hidden');
+}
+
+// Affiche « Livré le » quand le statut est « Livré ». Pour un stop d'une
+// journée passée pas encore livré, propose le jour de la tournée (oubli du
+// livreur) : l'heure reste à ajuster.
+function majChampLivreLeSD() {
+  const livre = document.getElementById('sd-statut').value === 'LIVRE';
+  const champ = document.getElementById('sd-livre-le');
+  document.getElementById('sd-livre-le-bloc').style.visibility = livre ? 'visible' : 'hidden';
+  document.getElementById('sd-livre-le-aide').style.display = livre ? 'block' : 'none';
+  champ.max = versChampLocalSD(new Date());
+  if (!livre || champ.value) return;
+  const s = stopsDate.find(x => x.id === sdStopId);
+  const jour = s && s.date_tournee ? s.date_tournee.slice(0, 10) : '';
+  const maintenant = versChampLocalSD(new Date());
+  if (jour && jour < maintenant.slice(0, 10)) champ.value = `${jour}T${maintenant.slice(11)}`;
+}
+
+function fermerStopDate() {
+  document.getElementById('sd-modal').classList.add('hidden');
+  sdStopId = null;
+}
+
+async function enregistrerStopDate() {
+  if (!sdStopId) return;
+  const errEl = document.getElementById('sd-error');
+  const erreur = msg => { errEl.textContent = msg; errEl.style.display = 'block'; };
+  errEl.style.display = 'none';
+
+  const f = lireFicheStopDate();
+  if (!f.societe) return erreur('La société est obligatoire.');
+  if (!f.adresse) return erreur('L\'adresse est obligatoire.');
+
+  // Seuls les champs modifiés partent : pas de nouveau géocodage ni de
+  // renvoi au suivi d'affaires pour un champ qui n'a pas bougé.
+  const body = {};
+  ['societe', 'adresse', 'telephone', 'date_tournee', 'statut', 'tournee', 'vehicule',
+   'type_produit', 'reference_client', 'groupe_livraison'].forEach(k => {
+    if (f[k] !== sdInitial[k]) body[k] = f[k] === '' ? null : f[k];
+  });
+
+  if (f.statut === 'LIVRE' && f.livre_le && f.livre_le !== sdInitial.livre_le) {
+    const d = new Date(f.livre_le);
+    if (Number.isNaN(d.getTime()) || d.getTime() > Date.now()) {
+      return erreur('La date de livraison ne peut pas être dans le futur.');
+    }
+    body.livre_le = d.toISOString();
+  }
+
+  if (!Object.keys(body).length) { fermerStopDate(); return; }
+
+  if (body.statut === 'ANNULE'
+      && !confirm(`Annuler la livraison de ${f.societe} ?\n\nLe stop restera visible comme « Annulé » et l'annulation sera transmise au suivi d'affaires.`)) {
+    return;
+  }
+
+  const btn = document.getElementById('sd-save');
+  btn.disabled = true;
+  try {
+    const res = await fetch(`/api/stops/${sdStopId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return erreur(data.error || 'Erreur serveur. Réessayez.');
+
+    fermerStopDate();
+    // La date a pu changer : on relit la journée affichée, puis la tournée
+    // du jour et le tableau de bord, qui peuvent contenir ce stop.
+    await chargerStopsDate();
+    await loadStops();
+  } catch {
+    erreur('Erreur réseau. Réessayez.');
+  } finally {
+    btn.disabled = false;
+  }
+}

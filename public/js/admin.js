@@ -46,7 +46,7 @@ function switchTab(tab) {
     el.classList.toggle('active', ['users','stops','logs','planning'][i] === tab);
   });
 
-  const titles = { users: 'Utilisateurs', stops: 'Stops (debug)', logs: 'Logs activité', planning: 'Planning des livraisons' };
+  const titles = { users: 'Utilisateurs', stops: 'Stops par date', logs: 'Logs activité', planning: 'Planning des livraisons' };
   document.getElementById('topbar-title').textContent = titles[tab];
 
   const actionsEl = document.getElementById('topbar-actions');
@@ -270,7 +270,7 @@ async function setUserActive(id, actif) {
   }
 }
 
-// ── Debug stops ────────────────────────────────────────────────
+// ── Stops par date ────────────────────────────────────────────────
 async function loadDebugStops() {
   const date = document.getElementById('debug-date').value;
   if (!date) return;

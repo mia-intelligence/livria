@@ -109,6 +109,10 @@
         Planning des sorties
         <span class="badge">Bêta</span>
       </a>
+      <a data-section="stopsdate" onclick="showSection('stopsdate')">
+        <svg class="ic" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"/><path d="M3 9h18M9 21V9" stroke="currentColor" stroke-width="2"/></svg>
+        Stops par date
+      </a>
       <a data-section="historique" onclick="showSection('historique')">
         <svg class="ic" viewBox="0 0 24 24" fill="none"><path d="M3 12a9 9 0 1 0 3-6.7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M3 4v5h5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 7v5l3 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         Historique
@@ -317,6 +321,32 @@
       </div>
 
       <!-- ── HISTORIQUE ─────────────────────────────────────── -->
+      <!-- ── Stops par date : tous les stops d'une journée, à corriger ── -->
+      <div class="stops-section" id="section-stopsdate">
+        <div class="page-head">
+          <div>
+            <h1>Stops par date</h1>
+            <div class="lead" id="sd-lead">Choisir une journée pour voir et corriger ses stops</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;margin-left:auto">
+            <input type="date" id="sd-date" onchange="chargerStopsDate()"
+              style="height:36px;border-radius:8px;border:1px solid var(--line);padding:0 10px;font:inherit;font-size:13px">
+          </div>
+        </div>
+        <div class="card" style="padding:0">
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th>#</th><th>Société</th><th>Affaire</th><th>Type</th><th>Tournée</th><th>Statut</th><th>Livré le</th><th>Magasin</th><th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="sd-tbody">
+              <tr><td colspan="9" style="text-align:center;color:var(--ink-mute);padding:32px 0">Chargement…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="stops-section" id="section-historique">
         <div class="page-head">
           <div>
@@ -569,6 +599,76 @@
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- ── MODAL STOPS PAR DATE : corriger un stop ── -->
+<div class="modal-overlay hidden" id="sd-modal">
+  <div class="modal" style="max-width:640px;width:95vw">
+    <h2>Modifier le stop</h2>
+    <div class="modal-sub" id="sd-desc"></div>
+    <div id="sd-error" style="background:var(--danger-soft);color:#A14444;border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:14px;display:none"></div>
+
+    <div class="field"><label>Société</label><input type="text" id="sd-societe"></div>
+    <div class="field"><label>Adresse</label><input type="text" id="sd-adresse"></div>
+    <div class="grid-2">
+      <div class="field"><label>Téléphone</label><input type="text" id="sd-telephone"></div>
+      <div class="field"><label>Date de tournée</label><input type="date" id="sd-date-tournee"></div>
+    </div>
+    <div class="grid-2">
+      <div class="field"><label>Statut</label>
+        <select id="sd-statut" onchange="majChampLivreLeSD()">
+          <option value="A_LIVRER">À livrer</option>
+          <option value="EN_COURS">En cours</option>
+          <option value="LIVRE">Livré</option>
+          <option value="ANNULE">Annulé</option>
+        </select>
+      </div>
+      <div class="field" id="sd-livre-le-bloc" style="visibility:hidden">
+        <label>Livré le (date et heure réelles)</label>
+        <input type="datetime-local" id="sd-livre-le">
+      </div>
+    </div>
+    <div id="sd-livre-le-aide" style="font-size:12px;color:var(--ink-mute);margin:-6px 0 14px;display:none">La date « Livré le » est celle qui part dans le suivi d'affaires. Laisser vide pour « maintenant ».</div>
+    <div class="grid-2">
+      <div class="field"><label>Tournée</label>
+        <select id="sd-tournee">
+          <option value="">— Aucune —</option>
+          <option value="ENLEVEMENT">Enlèvement</option>
+          <option value="TOURNEE LUNDI">Tournée Lundi</option>
+          <option value="MARDI T06-T83EST">Mardi T06-T83EST</option>
+          <option value="MERCREDI T13">Mercredi T13</option>
+          <option value="TOURNEE JEUDI">Tournée Jeudi</option>
+          <option value="VENDREDI T83 OUEST">Vendredi T83 Ouest</option>
+          <option value="LIVRAISON CHANTIER">Livraison Chantier</option>
+          <option value="TRANSPORTEUR">Transporteur</option>
+        </select>
+      </div>
+      <div class="field"><label>Véhicule</label>
+        <select id="sd-vehicule">
+          <option value="">— Aucun —</option>
+          <option value="VL">VL</option>
+          <option value="PL">PL</option>
+        </select>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="field"><label>Type produit</label>
+        <select id="sd-type-produit">
+          <option value="">— Aucun —</option>
+          <option value="PVC">PVC</option>
+          <option value="ALU">ALU</option>
+          <option value="MIXTE">MIXTE</option>
+        </select>
+      </div>
+      <div class="field"><label>Référence client</label><input type="text" id="sd-reference-client"></div>
+    </div>
+    <div class="field"><label>Groupe livraison</label><input type="text" id="sd-groupe"></div>
+
+    <div class="modal-actions">
+      <button class="btn" onclick="fermerStopDate()">Annuler</button>
+      <button class="btn primary" id="sd-save" onclick="enregistrerStopDate()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
 <script src="/js/planning.js"></script>
 <script src="/js/adv.js"></script>
 </body>

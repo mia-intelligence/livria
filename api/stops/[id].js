@@ -31,10 +31,10 @@ module.exports = async function handler(req, res) {
 
     const updates = {};
 
-    // Date et heure réelles de la livraison, saisies par l'admin quand le
-    // livreur a oublié de cliquer « livré » sur le moment.
+    // Date et heure réelles de la livraison, saisies par l'ADV ou l'admin
+    // quand le livreur a oublié de cliquer « livré » sur le moment.
     let livreLeSaisi;
-    if (role === 'ADMIN' && livre_le) {
+    if (['ADV', 'ADMIN'].includes(role) && livre_le) {
       const d = new Date(livre_le);
       if (Number.isNaN(d.getTime())) {
         return res.status(400).json({ error: 'Date de livraison invalide' });
@@ -68,7 +68,7 @@ module.exports = async function handler(req, res) {
       if (statut !== undefined) updates.statut = statut;
 
       // Horodatage de la livraison : c'est lui que le script de retour relit.
-      //  - heure saisie par l'admin : elle prime ;
+      //  - heure saisie par l'ADV ou l'admin : elle prime ;
       //  - passage en LIVRE sans heure saisie : heure du clic ;
       //  - stop déjà livré, réenregistré sans heure saisie : on n'y touche pas ;
       //  - retour en arrière : effacé.
