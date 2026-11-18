@@ -413,7 +413,12 @@ module.exports = async function handler(req, res) {
       groupe_livraison,
       reference_client,
       arc_reference,
+      sav,
     } = req.body;
+
+    // Livraison SAV : ajout pour un client, sans commande ARC (facture
+    // Prodevis), hors suivi d'affaires. Décision ADV / admin.
+    const estSav = !!sav && ['ADV', 'ADMIN'].includes(role);
 
     if (!societe || !adresse || !societe_livraison) {
       return res.status(400).json({ error: 'societe, adresse et societe_livraison sont requis' });
@@ -478,8 +483,11 @@ module.exports = async function handler(req, res) {
         reference_client:  reference_client  || null,
         // Clé de la commande ARC choisie dans la liste (jamais saisie) : c'est
         // par elle que le script nocturne ramène l'adresse sur la commande.
-        arc_reference:     arc_reference     || null,
+        arc_reference:     estSav ? null : (arc_reference || null),
         origine:           role === 'LIVREUR' ? 'livreur' : 'adv',
+        // Envoyé seulement s'il est coché : la création ordinaire ne dépend
+        // pas de la colonne (migration 20261118_stop_sav.sql).
+        ...(estSav ? { sav: true } : {}),
       })
       .select('*, stop_photos(id, photo_url, type, created_at)')
       .single();
