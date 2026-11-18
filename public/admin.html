@@ -314,6 +314,10 @@
     </div>
     <div class="field-sm" style="margin-bottom:16px"><label>Référence client <span style="font-weight:400;color:var(--ink-mute);font-size:11px">— relie PVC et ALU d'un même client</span></label><input type="text" id="es-reference-client" placeholder="ex: REF-DUPONT"></div>
     <div class="field-sm" style="margin-bottom:16px"><label>Groupe livraison <span style="font-weight:400;color:var(--ink-mute);font-size:11px">— relie plusieurs stops d'un même client (ex: GRP-001)</span></label><input type="text" id="es-groupe" placeholder="ex: GRP-001"></div>
+    <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;margin-bottom:16px">
+      <input type="checkbox" id="es-sav" style="width:16px;height:16px">
+      <span><b>Livraison SAV</b> <span style="color:var(--ink-mute)">— sans commande ARC (facture Prodevis), hors suivi d'affaires</span></span>
+    </label>
 
     <div class="modal-actions">
       <button class="btn" onclick="closeEditStopModal()">Annuler</button>

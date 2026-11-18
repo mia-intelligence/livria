@@ -23,7 +23,7 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === 'PATCH') {
-    const { statut, ordre, tournee, vehicule, lieu_livraison, adresse_verifiee, societe_livraison, nombre_colis, emplacement, photo_url, magasin_valide, magasin_valide_at, commentaire_magasin, livreur_colis_confirme, colis_livres, type_produit, groupe_livraison, reference_client, arc_reference, date_tournee, societe, adresse, telephone, numero_affaire, latitude, longitude, livre_le } = req.body;
+    const { statut, ordre, tournee, vehicule, lieu_livraison, adresse_verifiee, societe_livraison, nombre_colis, emplacement, photo_url, magasin_valide, magasin_valide_at, commentaire_magasin, livreur_colis_confirme, colis_livres, type_produit, groupe_livraison, reference_client, arc_reference, date_tournee, societe, adresse, telephone, numero_affaire, latitude, longitude, livre_le, sav } = req.body;
     const VALID_STATUTS  = ['A_LIVRER', 'EN_COURS', 'LIVRE', 'ANNULE'];
     const VALID_TOURNEES = ['ENLEVEMENT','TOURNEE LUNDI','MARDI T06-T83EST','MERCREDI T13','TOURNEE JEUDI','VENDREDI T83 OUEST','LIVRAISON CHANTIER','TRANSPORTEUR'];
     const VALID_VEHICULES = ['PL', 'VL'];
@@ -202,6 +202,8 @@ module.exports = async function handler(req, res) {
         updates.type_produit = type_produit;
       }
       if (groupe_livraison !== undefined) updates.groupe_livraison = groupe_livraison;
+      // Livraison SAV (sans ARC, facture Prodevis, hors suivi d'affaires)
+      if (sav !== undefined) updates.sav = !!sav;
       if (reference_client !== undefined) updates.reference_client = reference_client;
       // Rattachement à une commande ARC (null pour détacher)
       if (arc_reference !== undefined)    updates.arc_reference    = arc_reference;
