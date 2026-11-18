@@ -171,7 +171,7 @@ const SECTION_TITLES = {
   affaires: 'Affaires à planifier',
   tournee: 'Tournée du jour',
   planning: 'Planning des livraisons',
-  stopsdate: 'Stops par date',
+  stopsdate: 'Gestion des livraisons',
   historique: 'Historique des livraisons'
 };
 
@@ -1463,7 +1463,7 @@ function esc(str) {
 // ── Boot ───────────────────────────────────────────────────────
 init();
 
-/* ── Stops par date ─────────────────────────────────────────────
+/* ── Gestion des livraisons ─────────────────────────────────────────────
    Tous les stops d'une journée, quelle qu'elle soit, avec une fiche de
    correction. Sert notamment à passer « livré » un stop que le livreur a
    oublié de valider, à sa date et son heure réelles (c'est ce « Livré le »
