@@ -347,7 +347,7 @@ function arcRowHTML(c, i, compact) {
     c.reference ? esc(c.reference) : '',
     c.gamme ? esc(c.gamme) : '',
     c.date_document ? `ARC du ${fmtDateFr(c.date_document)}` : 'ARC non daté',
-    mode ? esc(mode) + (c.date_livraison_prevue ? ` le ${fmtDateFr(c.date_livraison_prevue)}` : '') : '',
+    mode ? esc(mode) + (dateSortieArc(c) ? ` le ${fmtDateFr(dateSortieArc(c))}` : '') : '',
   ].filter(Boolean).join(' · ');
 
   return `
@@ -1000,6 +1000,10 @@ function closeNewStopModal() {
 let arcRechercheTimer = null;
 let arcResultats      = [];
 
+// Date de sortie d'une commande : le report saisi dans le suivi d'affaires
+// (date_sortie_suivi) l'emporte sur la date imprimée sur l'ARC.
+function dateSortieArc(c) { return (c && (c.date_sortie_suivi || c.date_livraison_prevue)) || ''; }
+
 // Libellé affiché pour arc_commandes.mode_livraison (= stops.societe_livraison)
 const MODES_ARC = {
   ATRIAL:       'livraison Atrial',
@@ -1079,8 +1083,8 @@ function appliquerArc(c) {
     if (c.mode_livraison !== 'ATRIAL') tourneeEl.value = c.mode_livraison;
     else if (['ENLEVEMENT', 'TRANSPORTEUR'].includes(tourneeEl.value)) tourneeEl.value = '';
   }
-  if (c.date_livraison_prevue) {
-    document.getElementById('ns-date-tournee').value = c.date_livraison_prevue.slice(0, 10);
+  if (dateSortieArc(c)) {
+    document.getElementById('ns-date-tournee').value = dateSortieArc(c).slice(0, 10);
   }
 
   const reglement = c.acompte_present === 'oui'
@@ -1088,7 +1092,7 @@ function appliquerArc(c) {
       + (c.montant_solde != null ? ` · reste dû ${fmtEuro(c.montant_solde)}` : '')
     : 'sans acompte';
   const mode = MODES_ARC[c.mode_livraison]
-    ? `${MODES_ARC[c.mode_livraison]}${c.date_livraison_prevue ? ' le ' + fmtDateFr(c.date_livraison_prevue) : ''} · `
+    ? `${MODES_ARC[c.mode_livraison]}${dateSortieArc(c) ? ' le ' + fmtDateFr(dateSortieArc(c)) : ''} · `
     : '';
   document.getElementById('ns-arc-choisi-texte').innerHTML =
     `<strong>${esc(c.reference_complete)}</strong> <span class="muted">— ${esc(mode + reglement)}</span>`;
@@ -1276,6 +1280,7 @@ function ficheHistoriqueHTML(s) {
       ${champ('Commande ARC', commande, true)}
       ${champ('Gamme', esc(arc.gamme))}
       ${champ('Livraison prévue sur l\'ARC', arc.date_livraison_prevue ? fmtDateFr(arc.date_livraison_prevue) + (arc.mode_livraison ? ' · ' + esc(arc.mode_livraison) : '') : '')}
+      ${champ('Date corrigée dans le suivi', arc.date_sortie_suivi ? fmtDateFr(arc.date_sortie_suivi) : '')}
       ${champ('Commentaire magasin', esc(s.commentaire_magasin), true)}
     </div>
 
