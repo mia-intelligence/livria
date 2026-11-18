@@ -262,13 +262,18 @@
         </select>
       </div>
       <div class="field-sm"><label>Statut</label>
-        <select id="es-statut">
+        <select id="es-statut" onchange="majChampLivreLe()">
           <option value="A_LIVRER">À livrer</option>
           <option value="EN_COURS">En cours</option>
           <option value="LIVRE">Livré</option>
           <option value="ANNULE">Annulé</option>
         </select>
       </div>
+    </div>
+    <div id="es-livre-le-bloc" class="field-sm" style="margin-bottom:10px;display:none">
+      <label>Livré le (date et heure réelles)</label>
+      <input type="datetime-local" id="es-livre-le">
+      <div style="font-size:11px;color:var(--ink-mute);margin-top:3px">C'est cette date qui part dans le suivi d'affaires. Laisser vide pour « maintenant ».</div>
     </div>
     <div class="edit-grid-2" style="margin-bottom:10px">
       <div class="field-sm"><label>Tournée</label>
