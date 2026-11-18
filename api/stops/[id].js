@@ -23,7 +23,7 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === 'PATCH') {
-    const { statut, ordre, tournee, vehicule, lieu_livraison, adresse_verifiee, societe_livraison, nombre_colis, emplacement, photo_url, magasin_valide, magasin_valide_at, commentaire_magasin, livreur_colis_confirme, colis_livres, type_produit, groupe_livraison, reference_client, arc_reference, date_tournee, societe, adresse, telephone, numero_affaire, latitude, longitude } = req.body;
+    const { statut, ordre, tournee, vehicule, lieu_livraison, adresse_verifiee, societe_livraison, nombre_colis, emplacement, photo_url, magasin_valide, magasin_valide_at, commentaire_magasin, livreur_colis_confirme, colis_livres, type_produit, groupe_livraison, reference_client, arc_reference, date_tournee, societe, adresse, telephone, numero_affaire, latitude, longitude, livre_le } = req.body;
     const VALID_STATUTS  = ['A_LIVRER', 'EN_COURS', 'LIVRE', 'ANNULE'];
     const VALID_TOURNEES = ['ENLEVEMENT','TOURNEE LUNDI','MARDI T06-T83EST','MERCREDI T13','TOURNEE JEUDI','VENDREDI T83 OUEST','LIVRAISON CHANTIER','TRANSPORTEUR'];
     const VALID_VEHICULES = ['PL', 'VL'];
@@ -31,8 +31,24 @@ module.exports = async function handler(req, res) {
 
     const updates = {};
 
-    if (statut !== undefined) {
-      if (!VALID_STATUTS.includes(statut)) {
+    // Date et heure réelles de la livraison, saisies par l'ADV ou l'admin
+    // quand le livreur a oublié de cliquer « livré » sur le moment.
+    let livreLeSaisi;
+    if (['ADV', 'ADMIN'].includes(role) && livre_le) {
+      const d = new Date(livre_le);
+      if (Number.isNaN(d.getTime())) {
+        return res.status(400).json({ error: 'Date de livraison invalide' });
+      }
+      if (d.getTime() > Date.now() + 5 * 60 * 1000) {
+        return res.status(400).json({ error: 'La date de livraison ne peut pas être dans le futur' });
+      }
+      livreLeSaisi = d.toISOString();
+    }
+
+    let livreLeCorrige = null;
+
+    if (statut !== undefined || livreLeSaisi) {
+      if (statut !== undefined && !VALID_STATUTS.includes(statut)) {
         return res.status(400).json({ error: 'statut invalide' });
       }
       // Annuler une livraison est une décision ADV : le livreur ne peut pas.
@@ -41,16 +57,35 @@ module.exports = async function handler(req, res) {
       if (statut === 'ANNULE' && !['ADV', 'ADMIN'].includes(role)) {
         return res.status(403).json({ error: 'Seule l\'ADV peut annuler une livraison' });
       }
-      if (role === 'LIVREUR') {
-        const { data: stop } = await db.from('stops').select('societe_livraison').eq('id', id).single();
-        if (!stop || stop.societe_livraison !== 'ATRIAL') {
-          return res.status(403).json({ error: 'Accès refusé' });
-        }
+      const { data: actuel } = await db.from('stops').select('societe_livraison, statut, livre_le').eq('id', id).single();
+      if (!actuel) return res.status(404).json({ error: 'Stop introuvable' });
+      if (role === 'LIVREUR' && actuel.societe_livraison !== 'ATRIAL') {
+        return res.status(403).json({ error: 'Accès refusé' });
       }
-      updates.statut = statut;
-      // Horodatage de la livraison : posé au passage en LIVRE, effacé si on
-      // revient en arrière. C'est lui que le script de retour relit.
-      updates.livre_le = statut === 'LIVRE' ? new Date().toISOString() : null;
+
+      const dejaLivre   = actuel.statut === 'LIVRE' && !!actuel.livre_le;
+      const statutFinal = statut !== undefined ? statut : actuel.statut;
+      if (statut !== undefined) updates.statut = statut;
+
+      // Horodatage de la livraison : c'est lui que le script de retour relit.
+      //  - heure saisie par l'ADV ou l'admin : elle prime ;
+      //  - passage en LIVRE sans heure saisie : heure du clic ;
+      //  - stop déjà livré, réenregistré sans heure saisie : on n'y touche pas ;
+      //  - retour en arrière : effacé.
+      if (statutFinal !== 'LIVRE') {
+        if (statut !== undefined) updates.livre_le = null;
+      } else if (livreLeSaisi) {
+        updates.livre_le = livreLeSaisi;
+        // Correction d'un stop déjà livré : le statut ne change pas, donc le
+        // déclencheur ne le signale pas. On le marque à reporter nous-mêmes
+        // pour que la bonne date parte dans le suivi d'affaires.
+        if (dejaLivre && new Date(actuel.livre_le).getTime() !== new Date(livreLeSaisi).getTime()) {
+          updates.statut_modifie_le = new Date().toISOString();
+          livreLeCorrige = { avant: actuel.livre_le, apres: livreLeSaisi };
+        }
+      } else if (!dejaLivre) {
+        updates.livre_le = new Date().toISOString();
+      }
     }
 
     if (ordre !== undefined && ['ADV', 'ADMIN'].includes(role)) {
@@ -190,7 +225,8 @@ module.exports = async function handler(req, res) {
 
     // Log actions clés
     const userIdentifiant = session.users.identifiant;
-    if (updates.statut) await log(userIdentifiant, `STOP_${updates.statut}`, { stop_id: id, societe: data.societe });
+    if (updates.statut) await log(userIdentifiant, `STOP_${updates.statut}`, { stop_id: id, societe: data.societe, ...(updates.livre_le ? { livre_le: updates.livre_le } : {}) });
+    if (livreLeCorrige) await log(userIdentifiant, 'STOP_LIVRE_LE_CORRIGE', { stop_id: id, societe: data.societe, ...livreLeCorrige });
     if (updates.magasin_valide) await log(userIdentifiant, 'STOP_MAGASIN_VALIDE', { stop_id: id, societe: data.societe, colis: data.nombre_colis });
     if (updates.password_hash) await log(userIdentifiant, 'PASSWORD_RESET', { stop_id: id });
 

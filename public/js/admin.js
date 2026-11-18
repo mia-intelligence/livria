@@ -7,6 +7,7 @@ let pendingResetId = null;
 let currentTab = 'users';
 let debugStops = [];
 let editStopId = null;
+let esLivreLeInitial = '';   // valeur du champ « Livré le » à l'ouverture de la fiche
 
 // ── Init ───────────────────────────────────────────────────────
 async function init() {
@@ -45,7 +46,7 @@ function switchTab(tab) {
     el.classList.toggle('active', ['users','stops','logs','planning'][i] === tab);
   });
 
-  const titles = { users: 'Utilisateurs', stops: 'Stops (debug)', logs: 'Logs activité', planning: 'Planning des livraisons' };
+  const titles = { users: 'Utilisateurs', stops: 'Gestion des livraisons', logs: 'Logs activité', planning: 'Planning des livraisons' };
   document.getElementById('topbar-title').textContent = titles[tab];
 
   const actionsEl = document.getElementById('topbar-actions');
@@ -269,7 +270,7 @@ async function setUserActive(id, actif) {
   }
 }
 
-// ── Debug stops ────────────────────────────────────────────────
+// ── Gestion des livraisons ────────────────────────────────────────────────
 async function loadDebugStops() {
   const date = document.getElementById('debug-date').value;
   if (!date) return;
@@ -338,8 +339,35 @@ function openEditStop(id) {
   document.getElementById('es-reference-client').value = s.reference_client || '';
   document.getElementById('es-groupe').value           = s.groupe_livraison || '';
 
+  // Date et heure réelles de la livraison (modifiables si le statut est « Livré »)
+  esLivreLeInitial = s.livre_le ? versChampLocal(new Date(s.livre_le)) : '';
+  document.getElementById('es-livre-le').value = esLivreLeInitial;
+  majChampLivreLe();
+
   document.getElementById('edit-stop-modal').classList.remove('hidden');
 }
+
+// Valeur d'un champ datetime-local (heure locale du navigateur, à la minute)
+function versChampLocal(d) {
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+// Affiche le champ « Livré le » quand le statut est « Livré ». Pour un stop
+// d'une journée passée pas encore livré, propose le jour de la tournée
+// (oubli du livreur) : l'heure reste à ajuster.
+function majChampLivreLe() {
+  const livre = document.getElementById('es-statut').value === 'LIVRE';
+  const champ = document.getElementById('es-livre-le');
+  document.getElementById('es-livre-le-bloc').style.display = livre ? 'block' : 'none';
+  champ.max = versChampLocal(new Date());
+  if (!livre || champ.value) return;
+  const s = debugStops.find(x => x.id === editStopId);
+  const jour = s && s.date_tournee ? s.date_tournee.slice(0, 10) : '';
+  const maintenant = versChampLocal(new Date());
+  if (jour && jour < maintenant.slice(0, 10)) champ.value = `${jour}T${maintenant.slice(11)}`;
+}
+
 function closeEditStopModal() {
   document.getElementById('edit-stop-modal').classList.add('hidden');
   editStopId = null;
@@ -367,6 +395,18 @@ async function saveEditStop() {
     reference_client: document.getElementById('es-reference-client').value.trim() || null,
     groupe_livraison: document.getElementById('es-groupe').value.trim() || null,
   };
+
+  // Heure de livraison : envoyée seulement si l'admin l'a saisie ou changée
+  // (sinon le serveur garde l'heure existante, ou pose l'heure du clic).
+  const livreLe = document.getElementById('es-livre-le').value;
+  if (body.statut === 'LIVRE' && livreLe && livreLe !== esLivreLeInitial) {
+    const d = new Date(livreLe);
+    if (Number.isNaN(d.getTime()) || d.getTime() > Date.now()) {
+      errEl.textContent = 'La date de livraison ne peut pas être dans le futur.';
+      errEl.style.display = 'block'; return;
+    }
+    body.livre_le = d.toISOString();
+  }
 
   try {
     const res = await fetch(`/api/stops/${editStopId}`, {
