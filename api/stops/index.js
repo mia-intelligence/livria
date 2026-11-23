@@ -284,47 +284,6 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // Planning mode : ?planning=true&from=YYYY-MM-DD&to=YYYY-MM-DD
-    if (req.query.planning === 'true') {
-      const { from, to } = req.query;
-      if (!from || !to) return res.status(400).json({ error: 'Paramètres from et to requis' });
-
-      const { data, error } = await db
-        .from('stops')
-        .select('id, date_tournee, statut, reference_client, societe, adresse, numero_affaire, tournee')
-        .gte('date_tournee', from)
-        .lte('date_tournee', to);
-
-      if (error) return res.status(500).json({ error: error.message });
-
-      // Une entrée par stop (avec son id) : depuis le planning, l'ADV clique
-      // sur une entrée pour reporter le stop à une autre date.
-      const result = {};
-      for (const stop of data) {
-        const d = stop.date_tournee;
-        if (!d) continue;
-        if (!result[d]) {
-          result[d] = { total: 0, livre: 0, en_cours: 0, a_livrer: 0, annule: 0, clients: [], affaires: [], entries: [] };
-        }
-        result[d].total++;
-        if (stop.statut === 'LIVRE')         result[d].livre++;
-        else if (stop.statut === 'EN_COURS') result[d].en_cours++;
-        else if (stop.statut === 'ANNULE')   result[d].annule++;
-        else                                 result[d].a_livrer++;
-
-        const client  = stop.reference_client || stop.societe || null;
-        const affaire = stop.numero_affaire || null;
-        if (client && !result[d].clients.includes(client))    result[d].clients.push(client);
-        if (affaire && !result[d].affaires.includes(affaire)) result[d].affaires.push(affaire);
-
-        result[d].entries.push({
-          id: stop.id, affaire, client, adresse: stop.adresse || null,
-          tournee: stop.tournee || null, statut: stop.statut,
-        });
-      }
-      return res.status(200).json(result);
-    }
-
     // Magasin, onglet « À préparer » : tout ce qui n'est pas encore validé,
     // quelle que soit la date (un stop créé au statut « fini » n'a souvent
     // pas encore de date de tournée). Sans date d'abord, puis par date.

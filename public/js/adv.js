@@ -154,7 +154,6 @@ const SECTION_TITLES = {
   dashboard: 'Tableau de bord',
   affaires: 'Affaires à planifier',
   tournee: 'Tournée du jour',
-  planning: 'Planning des livraisons',
   stopsdate: 'Gestion des livraisons',
   historique: 'Historique des livraisons'
 };
@@ -169,7 +168,6 @@ function showSection(name) {
 
   document.getElementById('topbar-title').textContent = SECTION_TITLES[name] || name;
 
-  if (name === 'planning') initPlanning();
   if (name === 'historique' && !historiqueCharge) chargerHistorique();
   if (name === 'stopsdate') ouvrirStopsDate();
 }
@@ -599,8 +597,8 @@ async function confirmDeleteStop() {
 // ── Reporter stop ─────────────────────────────────────────────
 let pendingReporterId = null;
 
-// `desc` : libellé fourni par le planning pour un stop d'une autre date,
-// absent de allStops (qui ne contient que la tournée du jour).
+// `desc` : libellé d'un stop d'une autre date, absent de allStops
+// (qui ne contient que la tournée du jour).
 function openReporterModal(id, currentDate, desc) {
   pendingReporterId = id;
   const stop = allStops.find(s => s.id === id);
@@ -641,8 +639,6 @@ async function confirmReporter() {
     }
     closeReporterModal();
     await loadStops();
-    // Report lancé depuis le planning : la grille se met à jour
-    if (typeof window.refreshPlanning === 'function') window.refreshPlanning();
   } catch {
     errEl.textContent   = 'Erreur réseau. Réessayez.';
     errEl.style.display = 'block';

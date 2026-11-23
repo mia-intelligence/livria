@@ -50,9 +50,17 @@
       <span>Ligne du bas : Production · Sortie</span>
       <span>GAG. = gagnée · PRÉPA. = en préparation · EN LIV. = en livraison</span>
       <span>AUT = autres · VR = volets roulants</span>
+      <span>Cliquez sur une affaire pour ouvrir sa fiche</span>
     </footer>
   </div>
 
+  <!-- Fiche latérale d'une sortie (hors de la scène mise à l'échelle) -->
+  <div class="so-voile" id="voile" hidden>
+    <aside class="so-fiche" id="fiche" role="dialog" aria-modal="true" aria-labelledby="fiche-titre" tabindex="-1"></aside>
+  </div>
+  <div class="so-annonce" id="annonce" role="status" aria-live="polite" hidden></div>
+
+  <script src="/js/sorties-fiche.js"></script>
   <script src="/js/sorties-mural.js"></script>
 </body>
 </html>

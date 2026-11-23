@@ -39,14 +39,14 @@ function setTopbarDate() {
 // ── Tab navigation ─────────────────────────────────────────────
 function switchTab(tab) {
   currentTab = tab;
-  ['users','stops','logs','planning'].forEach(t => {
+  ['users','stops','logs'].forEach(t => {
     document.getElementById(`tab-${t}`).style.display = t === tab ? '' : 'none';
   });
   document.querySelectorAll('.sidebar nav a').forEach((el, i) => {
-    el.classList.toggle('active', ['users','stops','logs','planning'][i] === tab);
+    el.classList.toggle('active', ['users','stops','logs'][i] === tab);
   });
 
-  const titles = { users: 'Utilisateurs', stops: 'Gestion des livraisons', logs: 'Logs activité', planning: 'Planning des livraisons' };
+  const titles = { users: 'Utilisateurs', stops: 'Gestion des livraisons', logs: 'Logs activité' };
   document.getElementById('topbar-title').textContent = titles[tab];
 
   const actionsEl = document.getElementById('topbar-actions');
@@ -64,7 +64,6 @@ function switchTab(tab) {
     const inp = document.getElementById('debug-date');
     if (!inp.value) { inp.value = today; loadDebugStops(); }
   }
-  if (tab === 'planning') initPlanning();
 }
 
 // ── Load users ─────────────────────────────────────────────────

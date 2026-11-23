@@ -227,6 +227,7 @@ module.exports = async function handler(req, res) {
     const userIdentifiant = session.users.identifiant;
     if (updates.statut) await log(userIdentifiant, `STOP_${updates.statut}`, { stop_id: id, societe: data.societe, ...(updates.livre_le ? { livre_le: updates.livre_le } : {}) });
     if (livreLeCorrige) await log(userIdentifiant, 'STOP_LIVRE_LE_CORRIGE', { stop_id: id, societe: data.societe, ...livreLeCorrige });
+    if (updates.adresse) await log(userIdentifiant, 'STOP_ADRESSE_MODIFIEE', { stop_id: id, societe: data.societe, adresse: updates.adresse });
     if (updates.magasin_valide) await log(userIdentifiant, 'STOP_MAGASIN_VALIDE', { stop_id: id, societe: data.societe, colis: data.nombre_colis });
     if (updates.password_hash) await log(userIdentifiant, 'PASSWORD_RESET', { stop_id: id });
 
