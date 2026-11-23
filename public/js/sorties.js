@@ -29,8 +29,6 @@
   let lundi = null;        // Date du lundi de la semaine affichée
   let donnees = null;      // dernière réponse de l'API
   let parCle = {};         // sorties indexées par clé, pour la fiche
-  let ouverte = null;      // clé de la sortie dont la fiche est ouverte
-  let dernierFocus = null; // étiquette à refocaliser à la fermeture de la fiche
 
   // ── Outils ────────────────────────────────────────────────────────────────
   const $ = id => document.getElementById(id);
@@ -175,7 +173,7 @@
   function etiquette(s) {
     const classes = ['so-carte'];
     if (s.realisee) classes.push('realisee'); else if (s.retard) classes.push('retard'); else if (s.prete_au_depart) classes.push('prete');
-    if (s.cle === ouverte) classes.push('ouverte');
+    if (s.cle === fiche.ouverte()) classes.push('ouverte');
     const contenu = s.contenu.length ? s.contenu.map(c => c.qte + ' ' + c.code).join(' · ') : 'Contenu non détaillé';
     return '<button type="button" class="' + classes.join(' ') + '" data-cle="' + esc(s.cle) + '" aria-label="Ouvrir la fiche ' + esc(s.numero) + ', ' + esc(s.chantier) + '">'
       + '<span class="so-l1"><span class="so-chantier">' + esc(s.chantier || s.numero) + '</span><span class="so-num">' + esc(s.numero) + '</span></span>'
@@ -189,154 +187,15 @@
       + '</button>';
   }
 
-  // ── Fiche latérale ────────────────────────────────────────────────────────
-  function ouvrirFiche(cle) {
-    const s = parCle[cle];
-    if (!s) return;
-    ouverte = cle;
-    dernierFocus = document.activeElement;
-    document.querySelectorAll('.so-carte.ouverte').forEach(e => e.classList.remove('ouverte'));
-    const carte = document.querySelector('.so-carte[data-cle="' + (window.CSS && CSS.escape ? CSS.escape(cle) : cle) + '"]');
-    if (carte) carte.classList.add('ouverte');
-
-    const total = s.alu + ' ALU · ' + s.pvc + ' PVC · ' + s.autres + ' autres · ' + s.vr + ' VR';
-    const lignes = s.lignes.length
-      ? s.lignes.map(l => '<div class="so-art' + (l.famille === 'INCONNU' ? ' inconnue' : '') + '"><b>' + esc(l.quantite == null ? '' : l.quantite) + '</b>'
-          + '<span class="code">' + esc(l.code || (l.famille === 'INCONNU' ? 'non classé' : '')) + '</span>'
-          + '<span class="lib">' + esc(l.designation) + '</span></div>').join('')
-      : '<span class="so-note">Aucune ligne d’ARC rattachée à cette sortie.</span>';
-    const nonClassees = s.lignes.filter(l => l.famille === 'INCONNU').length;
-
-    $('fiche').innerHTML =
-      '<div class="so-fiche-haut"><div>'
-      + '<span class="client">' + esc(s.client) + '</span>'
-      + '<h2 id="fiche-titre">' + esc(s.chantier || s.numero) + '</h2>'
-      + '<span class="affaire">Affaire ' + esc(s.numero) + '</span></div>'
-      + '<button type="button" class="so-btn fleche" id="fiche-fermer" aria-label="Fermer la fiche">×</button></div>'
-
-      + '<section class="bloc"><h3>SORTIE</h3>'
-      + '<div class="so-champ">Date de sortie prévue<b>' + esc(dateLongue(s.date)) + '</b></div>'
-      + '<div class="so-champ">Mode de sortie<b>' + MODES[s.mode].long + '</b></div>'
-      + (s.retard ? '<span class="so-alerte">En retard : la date de sortie est atteinte ou dépassée.</span>' : '')
-      + '<div id="fiche-date">' + (s.source === 'arc'
-          ? '<span class="so-note">Date modifiable une fois l’affaire dans LIVRIAL.</span>'
-          : (s.realisee ? '<span class="so-note">Sortie réalisée : la date n’est plus modifiable.</span>' : ''))
-      + '</div></section>'
-
-      + '<section><h3>STATUTS</h3><div class="so-deux">'
-      + '<div><span>Production</span><strong class="' + classeProd(s) + '">' + esc(libProd(s)) + '</strong></div>'
-      + '<div><span>Sortie (LIVRIAL)</span><strong class="' + classeSortie(s) + '">' + esc(libSortie(s)) + '</strong></div></div>'
-      + '<span class="so-note">' + (s.source === 'arc'
-          ? 'Affaire pas encore dans LIVRIAL : la date vient de l’ARC.'
-          : 'Affaire dans LIVRIAL : la date est celle de la tournée.') + '</span></section>'
-
-      + '<section><h3>CONTENU DE LA COMMANDE</h3>' + lignes
-      + '<span class="so-note">Total : ' + total + '</span>'
-      + (nonClassees ? '<span class="so-note">' + nonClassees + (nonClassees > 1 ? ' lignes non classées ne sont pas comptées.' : ' ligne non classée n’est pas comptée.') + '</span>' : '')
-      + '</section>';
-
-    $('voile').hidden = false;
-    $('fiche-fermer').addEventListener('click', fermerFiche);
-    $('fiche').focus();
-    if (s.date_modifiable) installerDate(s);
-    if (s.source === 'stop') chargerHistorique(s);
-  }
-
-  // ── Modification de la date de sortie (affaire qui a un stop) ─────────────
-  const estWeekEnd = v => { const j = depuisIso(v).getDay(); return j === 0 || j === 6; };
-
-  function installerDate(s) {
-    const zone = $('fiche-date');
-    zone.innerHTML =
-      '<label class="so-champ" for="date-nouvelle">Nouvelle date de sortie'
-      + '<input type="date" id="date-nouvelle" value="' + esc(s.date) + '" aria-describedby="date-aide"></label>'
-      + '<span class="so-note" id="date-aide">Les samedis et dimanches sont refusés.</span>'
-      + '<span class="so-alerte" id="date-erreur" role="alert"></span>'
-      + '<div id="date-confirm"></div>'
-      + '<button type="button" class="so-primaire" id="date-enregistrer">Modifier la date</button>';
-
-    const champ = $('date-nouvelle'), err = $('date-erreur'), conf = $('date-confirm'), bouton = $('date-enregistrer');
-    const annuler = () => { conf.innerHTML = ''; bouton.hidden = false; };
-    champ.addEventListener('input', () => { err.textContent = ''; annuler(); });
-
-    // 1er clic : contrôle, puis demande de confirmation (ancienne et nouvelle date)
-    bouton.addEventListener('click', () => {
-      const v = champ.value;
-      err.textContent = '';
-      if (!v)             { err.textContent = 'Choisissez une date.'; return; }
-      if (v === s.date)   { err.textContent = 'La nouvelle date est identique à l’ancienne.'; return; }
-      if (estWeekEnd(v))  { err.textContent = 'Les samedis et dimanches sont refusés.'; return; }
-      bouton.hidden = true;
-      conf.innerHTML = '<div class="so-confirm"><span>Confirmer le changement de date ?<br>Ancienne date : <strong>' + esc(dateLongue(s.date))
-        + '</strong><br>Nouvelle date : <strong>' + esc(dateLongue(v)) + '</strong><br>La modification sera enregistrée dans l’historique avec votre nom.</span>'
-        + '<div><button type="button" class="so-primaire" id="date-oui">Confirmer</button>'
-        + '<button type="button" class="so-btn" id="date-non">Annuler</button></div></div>';
-      $('date-non').addEventListener('click', () => { annuler(); bouton.focus(); });
-      $('date-oui').addEventListener('click', () => enregistrerDate(s, v));
-      $('date-oui').focus();
-    });
-  }
-
-  // 2e clic : enregistrement. Le serveur refait tous les contrôles.
-  async function enregistrerDate(s, nouvelle) {
-    const oui = $('date-oui'), err = $('date-erreur');
-    oui.disabled = true; oui.textContent = 'Enregistrement…';
-    try {
-      const res = await fetch('/api/stops?sorties=date', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stop_id: s.stop_id, date: nouvelle }),
-      });
-      if (res.status === 401) { window.location.href = '/'; return; }
-      const corps = await res.json();
-      if (!res.ok) throw new Error(corps.error || 'Erreur ' + res.status);
-      const cle = s.cle;
-      await charger();                       // la sortie change de colonne (ou sort de la semaine)
-      if (parCle[cle]) ouvrirFiche(cle); else fermerFiche();
-      annoncer('Date de sortie modifiée : ' + dateLongue(nouvelle) + '.'
-        + (corps.tracee ? '' : ' Attention : la trace n’a pas pu être enregistrée.'));
-    } catch (e) {
-      $('date-confirm').innerHTML = '';
-      $('date-enregistrer').hidden = false;
-      err.textContent = 'Date non modifiée : ' + e.message;
-    }
-  }
-
-  // Message de confirmation, lu aussi par les lecteurs d'écran
-  function annoncer(texte) {
-    const zone = $('annonce');
-    zone.textContent = texte;
-    zone.hidden = false;
-    clearTimeout(annoncer.minuteur);
-    annoncer.minuteur = setTimeout(() => { zone.hidden = true; }, 6000);
-  }
-
-  // Historique des modifications de date (lu dans activity_logs)
-  async function chargerHistorique(s) {
-    const bloc = document.createElement('section');
-    bloc.innerHTML = '<h3>HISTORIQUE DES DATES</h3><span class="so-note">Chargement…</span>';
-    $('fiche').appendChild(bloc);
-    try {
-      const res = await fetch('/api/stops?sorties=historique&stop_id=' + encodeURIComponent(s.stop_id));
-      const lignes = await res.json();
-      if (!res.ok) throw new Error(lignes.error || 'Erreur ' + res.status);
-      if (ouverte !== s.cle) return;         // la fiche a changé entre-temps
-      const jour = v => v ? depuisIso(v).toLocaleDateString('fr-FR') : 'sans date';
-      bloc.innerHTML = '<h3>HISTORIQUE DES DATES</h3>' + (lignes.length
-        ? lignes.map(l => { const d = new Date(l.le);
-            return '<span class="so-histo">' + esc(d.toLocaleDateString('fr-FR')) + ' · ' + deux(d.getHours()) + ':' + deux(d.getMinutes())
-              + ' · ' + esc(l.par || 'inconnu') + ' · ' + esc(jour(l.ancienne_date)) + ' → ' + esc(jour(l.nouvelle_date)) + '</span>'; }).join('')
-        : '<span class="so-note">Aucune modification depuis cet écran.</span>');
-    } catch (e) {
-      bloc.innerHTML = '<h3>HISTORIQUE DES DATES</h3><span class="so-note">Historique indisponible.</span>';
-    }
-  }
-
-  function fermerFiche() {
-    $('voile').hidden = true;
-    ouverte = null;
-    document.querySelectorAll('.so-carte.ouverte').forEach(e => e.classList.remove('ouverte'));
-    if (dernierFocus && document.contains(dernierFocus)) dernierFocus.focus();
-  }
+  // ── Fiche latérale : voir sorties-fiche.js (partagée avec l'écran 3 jours) ──
+  const fiche = window.LivrialFiche.creer({
+    sortie:    cle => parCle[cle],
+    libelles:  () => donnees.libelles,
+    recharger: () => charger(),
+    carte:     '.so-carte',
+  });
+  const ouvrirFiche = cle => fiche.ouvrir(cle);
+  const fermerFiche = () => fiche.fermer();
 
   // ── Horloge ───────────────────────────────────────────────────────────────
   function horloge() {
@@ -357,8 +216,6 @@
       const carte = e.target.closest('.so-carte');
       if (carte) ouvrirFiche(carte.dataset.cle);
     });
-    $('voile').addEventListener('click', e => { if (e.target === $('voile')) fermerFiche(); });
-    document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('voile').hidden) fermerFiche(); });
 
     await charger();
   }

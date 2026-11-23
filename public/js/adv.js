@@ -75,37 +75,21 @@ function lieuBadge(s) {
   const lieu = s.lieu_livraison || 'CHANTIER';
   return `<span class="lieu-badge ${lieu.toLowerCase()}">${LIEU_LABEL[lieu] || esc(lieu)}</span>`;
 }
-// Vigilance adresse : stop automatique dont l'adresse (facturation, lue sur
-// l'ARC) n'a pas encore été confirmée par l'ADV.
-function adresseAVerifier(s) { return s.adresse_verifiee === false && !estClos(s); }
+// Vigilance adresse (décision du 23/11/2026) : l'adresse de facturation lue
+// sur l'ARC vaut adresse de livraison tant que l'ADV ne la corrige pas. Seule
+// une adresse absente est signalée, et jamais pour un enlèvement par le client.
+function adresseManquante(s) {
+  const a = (s.adresse || '').trim();
+  return !a || /^adresse à compléter/i.test(a);
+}
+function adresseAVerifier(s) {
+  return adresseManquante(s) && s.societe_livraison !== 'ENLEVEMENT' && !estClos(s);
+}
 function adresseBadge(s, avecBouton) {
   if (!adresseAVerifier(s)) return '';
   return `<div style="display:inline-flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap">
-    <span title="Adresse de facturation reprise de l'ARC : vérifiez l'adresse de livraison" style="font-size:11px;font-weight:700;color:#8A5A12;background:var(--warn-soft, #FFF4E0);border-radius:6px;padding:2px 7px;white-space:nowrap">⚠ Adresse à vérifier</span>
-    ${avecBouton ? `<button onclick="confirmerAdresse('${s.id}')" title="L'adresse est correcte, sans modification"
-      style="border:1px solid var(--line);background:var(--canvas);border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;cursor:pointer;color:var(--ink-soft);white-space:nowrap">✓ Adresse OK</button>` : ''}
+    <span title="Aucune adresse sur l'ARC : saisissez l'adresse de livraison" style="font-size:11px;font-weight:700;color:#8A5A12;background:var(--warn-soft, #FFF4E0);border-radius:6px;padding:2px 7px;white-space:nowrap">⚠ Adresse manquante</span>
   </div>`;
-}
-
-// « Adresse OK » : l'ADV confirme l'adresse sans la modifier
-async function confirmerAdresse(id) {
-  try {
-    const res = await fetch(`/api/stops/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ adresse_verifiee: true }),
-    });
-    if (!res.ok) throw new Error();
-    const updated = await res.json();
-    const maj = s => (s.id === id ? { ...s, adresse_verifiee: true, stop_photos: s.stop_photos || updated.stop_photos || [] } : s);
-    allStops        = allStops.map(maj);
-    stopsAPlanifier = stopsAPlanifier.map(maj);
-    renderDashboard();
-    renderAffaires();
-    renderTournee();
-  } catch {
-    alert('Impossible de confirmer l\'adresse. Réessayez.');
-  }
 }
 
 function lireRadio(name, defaut) {
@@ -170,7 +154,6 @@ const SECTION_TITLES = {
   dashboard: 'Tableau de bord',
   affaires: 'Affaires à planifier',
   tournee: 'Tournée du jour',
-  planning: 'Planning des livraisons',
   stopsdate: 'Gestion des livraisons',
   historique: 'Historique des livraisons'
 };
@@ -185,7 +168,6 @@ function showSection(name) {
 
   document.getElementById('topbar-title').textContent = SECTION_TITLES[name] || name;
 
-  if (name === 'planning') initPlanning();
   if (name === 'historique' && !historiqueCharge) chargerHistorique();
   if (name === 'stopsdate') ouvrirStopsDate();
 }
@@ -254,7 +236,7 @@ function renderDashboard() {
   const aVerifier = [...today, ...stopsAPlanifier].filter(adresseAVerifier).length;
   document.getElementById('dash-lead').textContent =
     `${today.length} stop${today.length > 1 ? 's' : ''} aujourd'hui · ${done} livré${done > 1 ? 's' : ''} · ${pending} en attente`
-    + (aVerifier ? ` · ⚠ ${aVerifier} adresse${aVerifier > 1 ? 's' : ''} à vérifier` : '');
+    + (aVerifier ? ` · ⚠ ${aVerifier} adresse${aVerifier > 1 ? 's' : ''} manquante${aVerifier > 1 ? 's' : ''}` : '');
 
   const preview = [...today].slice(0, 5);
   const previewEl = document.getElementById('dash-stops-preview');
@@ -615,8 +597,8 @@ async function confirmDeleteStop() {
 // ── Reporter stop ─────────────────────────────────────────────
 let pendingReporterId = null;
 
-// `desc` : libellé fourni par le planning pour un stop d'une autre date,
-// absent de allStops (qui ne contient que la tournée du jour).
+// `desc` : libellé d'un stop d'une autre date, absent de allStops
+// (qui ne contient que la tournée du jour).
 function openReporterModal(id, currentDate, desc) {
   pendingReporterId = id;
   const stop = allStops.find(s => s.id === id);
@@ -657,8 +639,6 @@ async function confirmReporter() {
     }
     closeReporterModal();
     await loadStops();
-    // Report lancé depuis le planning : la grille se met à jour
-    if (typeof window.refreshPlanning === 'function') window.refreshPlanning();
   } catch {
     errEl.textContent   = 'Erreur réseau. Réessayez.';
     errEl.style.display = 'block';
@@ -1219,6 +1199,7 @@ function ficheHistoriqueHTML(s) {
   // Statut et livraison
   const statut = `<span class="pill ${STATUS_CLASS[s.statut] || 'todo'}">${STATUS_LABEL[s.statut] || s.statut}</span>`
     + (s.livre_le ? ` <span class="muted" style="font-size:12px">le ${fmtDateHeureFr(s.livre_le)}</span>` : '')
+    + (s.statut === 'LIVRE' && s.livre_par_suivi_le ? ' <span class="muted" style="font-size:12px" title="Affaire passée « Livrée » dans le suivi d\'affaires : le stop s\'est fermé seul, à la date du suivi">· d\'après le suivi d\'affaires</span>' : '')
     + (s.statut === 'ANNULE' && s.annule_le ? ` <span class="muted" style="font-size:12px">le ${fmtDateHeureFr(s.annule_le)}</span>` : '');
   const tournee = [s.tournee, s.vehicule, s.lieu_livraison === 'DEPOT' ? 'Dépôt du client' : (s.lieu_livraison === 'CHANTIER' ? 'Chantier' : '')]
     .filter(Boolean).map(esc).join(' · ');

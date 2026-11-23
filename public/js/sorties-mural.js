@@ -146,7 +146,8 @@
     const qte = FAMILLES.filter(([c]) => s[c]).map(([c, lib]) => s[c] + ' ' + lib).join(' · ') || 'Contenu non détaillé';
     const cp = s.production === 'FINI' ? 'ok' : '';
     const cs = s.sortie === 'PRETE' ? 'ok' : (s.sortie === 'EN_LIVRAISON' ? 'cours' : '');
-    return '<div class="' + cl.join(' ') + '">'
+    return '<div class="' + cl.join(' ') + '" data-cle="' + esc(s.cle) + '" role="button" tabindex="0" aria-label="Ouvrir la fiche '
+      + esc(s.numero) + ', ' + esc(s.client) + '">'
       + '<span class="mu-c1">' + (s.mode === 'VL' ? '<span class="vl">VL</span>' : '')
       + '<span class="client">' + esc(s.client || 'Client non renseigné') + '</span><span class="chantier">' + esc(s.chantier) + '</span></span>'
       + '<span class="mu-c2">' + esc(qte) + '</span>'
@@ -226,6 +227,23 @@
     horloge(); setInterval(horloge, 15000);
 
     if (!(await verifierAcces())) return;
+
+    // Fiche d'une affaire (sorties-fiche.js) : clic ou touche Entrée sur une étiquette
+    const fiche = window.LivrialFiche.creer({
+      sortie:    cle => (donnees ? donnees.sorties.find(s => s.cle === cle) : null),
+      libelles:  () => donnees.libelles,
+      recharger: () => charger(),
+      carte:     '.mu-carte',
+    });
+    $('jours').addEventListener('click', e => {
+      const c = e.target.closest('.mu-carte[data-cle]');
+      if (c) fiche.ouvrir(c.dataset.cle);
+    });
+    $('jours').addEventListener('keydown', e => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const c = e.target.closest('.mu-carte[data-cle]');
+      if (c) { e.preventDefault(); fiche.ouvrir(c.dataset.cle); }
+    });
 
     $('btn-prec').addEventListener('click', () => { decalage = Math.max(-RECUL_MAX, decalage - 1); charger(); });
     $('btn-suiv').addEventListener('click', () => { decalage = Math.min(AVANCE_MAX, decalage + 1); charger(); });

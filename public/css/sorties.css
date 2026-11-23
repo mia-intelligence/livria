@@ -206,6 +206,8 @@ body.mural { overflow: hidden; height: 100vh; min-height: 0; display: block; }
 .mu-vide { font-size: 14px; color: var(--texte-off); text-align: center; padding: 14px 0; }
 
 .mu-carte { height: 54px; min-width: 0; background: var(--carte); border-left: 4px solid var(--carte); border-radius: 4px; padding: 3px 5px; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; }
+.mu-carte[data-cle] { cursor: pointer; }
+.mu-carte[data-cle]:hover, .mu-carte[data-cle]:focus-visible, .mu-carte.ouverte { outline: 2px solid var(--turquoise); outline-offset: -2px; }
 .mu-carte.prete { border-left-color: var(--vert); }
 .mu-carte.retard { border-left-color: var(--rouge); background: var(--rouge-fond); }
 .mu-carte.realisee { border-left-color: var(--gris-bande); opacity: .5; }
