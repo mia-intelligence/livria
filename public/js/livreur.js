@@ -17,6 +17,11 @@ const STATUS_CLASS = { A_LIVRER: 'todo',     EN_COURS: 'now',      LIVRE: 'done'
 // Lieu de livraison et véhicule, choisis par l'ADV
 const LIEU_LABEL     = { CHANTIER: '🏗 Chantier', DEPOT: '🏭 Dépôt' };
 const VEHICULE_LABEL = { PL: '🚛 Poids lourd', VL: '🚗 Véhicule léger' };
+// Adresse absente : rien sur l'ARC, l'ADV doit la saisir.
+function adresseManquante(s) {
+  const a = (s.adresse || '').trim();
+  return !a || /^adresse à compléter/i.test(a);
+}
 function lieuBadge(s) {
   const lieu = s.lieu_livraison || 'CHANTIER';
   return `<span class="lieu-badge ${lieu.toLowerCase()}">${LIEU_LABEL[lieu] || esc(lieu)}</span>`;
@@ -333,9 +338,10 @@ function renderStopsList() {
       : '';
 
     // Lieu de livraison (chantier / dépôt) et véhicule, fixés par l'ADV.
-    // Adresse pas encore confirmée par l'ADV : le livreur appelle avant de partir.
-    const adresseWarn = s.adresse_verifiee === false
-      ? `<span style="font-size:11px;font-weight:700;color:#8A5A12;background:var(--warn-soft);border-radius:6px;padding:2px 7px">⚠ Adresse à confirmer</span>` : '';
+    // Adresse absente (l'adresse de facturation de l'ARC vaut adresse de
+    // livraison tant que l'ADV ne la corrige pas) : le livreur appelle avant de partir.
+    const adresseWarn = adresseManquante(s)
+      ? `<span style="font-size:11px;font-weight:700;color:#8A5A12;background:var(--warn-soft);border-radius:6px;padding:2px 7px">⚠ Adresse manquante</span>` : '';
     const livraisonLine = `<div style="margin-top:5px;display:flex;flex-wrap:wrap;align-items:center;gap:6px">
       ${lieuBadge(s)}${adresseWarn}
       ${s.vehicule ? `<span style="font-size:11.5px;color:var(--ink-mute)">${VEHICULE_LABEL[s.vehicule] || esc(s.vehicule)}</span>` : ''}
@@ -418,8 +424,8 @@ function openSheet(id) {
   document.getElementById('sheet-lieu').innerHTML =
     `${lieuBadge(stop)}${stop.vehicule ? ` <span style="font-size:12.5px;color:var(--ink-soft)">${VEHICULE_LABEL[stop.vehicule] || esc(stop.vehicule)}</span>` : ''}`;
   document.getElementById('sheet-adresse').innerHTML = esc(stop.adresse)
-    + (stop.adresse_verifiee === false
-        ? '<div style="margin-top:4px;font-size:12px;font-weight:600;color:#8A5A12">⚠ Adresse reprise de la commande, non confirmée par l\'ADV : vérifiez avec le client avant de partir.</div>'
+    + (adresseManquante(stop)
+        ? '<div style="margin-top:4px;font-size:12px;font-weight:600;color:#8A5A12">⚠ Adresse manquante : vérifiez avec le client avant de partir.</div>'
         : '');
   document.getElementById('sheet-tel').innerHTML = stop.telephone
     ? `<a href="tel:${esc(stop.telephone)}">${esc(stop.telephone)}</a>`
