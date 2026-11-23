@@ -1,7 +1,7 @@
 const { getDB, getAdminDB } = require('../../lib/db');
 const { requireAuth } = require('../../lib/auth');
 const { geocoder } = require('../../lib/geo');
-const { lireSorties, modifierDateSortie, historiqueDates } = require('../../lib/sorties');
+const { lireSorties, modifierDateSortie, historiqueDates, enregistrerAdresseArc } = require('../../lib/sorties');
 
 // Colonnes de arc_commandes utiles au stop : identification, coordonnées de
 // facturation (adresse de livraison par défaut), règlement (le livreur
@@ -340,6 +340,18 @@ module.exports = async function handler(req, res) {
     const { stop_id, date } = req.body || {};
     try {
       return res.status(200).json(await modifierDateSortie(db, stop_id, date, session.users.identifiant));
+    } catch (e) {
+      return res.status(e.status || 500).json({ error: e.message });
+    }
+  }
+
+  // Planning des sorties : adresse de livraison d'une affaire sans stop
+  // POST ?sorties=coordonnees  { arc_reference, adresse, telephone }  — ADV et ADMIN
+  if (req.method === 'POST' && req.query.sorties === 'coordonnees') {
+    if (!['ADV', 'ADMIN'].includes(role)) return res.status(403).json({ error: 'Accès refusé' });
+    const { arc_reference, adresse, telephone } = req.body || {};
+    try {
+      return res.status(200).json(await enregistrerAdresseArc(db, arc_reference, { adresse, telephone }, session.users.identifiant));
     } catch (e) {
       return res.status(e.status || 500).json({ error: e.message });
     }

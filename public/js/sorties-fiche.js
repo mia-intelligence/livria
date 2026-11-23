@@ -81,7 +81,7 @@
             : (s.realisee ? '<span class="so-note">Sortie réalisée : la date n’est plus modifiable.</span>' : ''))
         + '</div></section>'
 
-        + (s.source === 'stop'
+        + (s.source === 'stop' || s.coordonnees_modifiables
             ? '<section class="bloc"><h3>' + (enlevement ? 'CLIENT' : 'LIVRAISON') + '</h3>'
               + '<div class="so-champ">' + (enlevement ? 'Adresse du client' : 'Adresse de livraison') + '<b>' + esc(s.adresse || 'Non renseignée') + '</b></div>'
               + '<div class="so-champ">Téléphone<b>' + esc(s.telephone || 'Non renseigné') + '</b></div>'
@@ -93,7 +93,7 @@
         + '<div><span>Production</span><strong class="' + classeProd(s) + '">' + esc(libProd(s)) + '</strong></div>'
         + '<div><span>Sortie (LIVRIAL)</span><strong class="' + classeSortie(s) + '">' + esc(libSortie(s)) + '</strong></div></div>'
         + '<span class="so-note">' + (s.source === 'arc'
-            ? 'Affaire pas encore dans LIVRIAL (fabrication non terminée) : la date vient du suivi d’affaires. L’adresse se modifie une fois l’affaire finie.'
+            ? 'Affaire pas encore dans LIVRIAL (fabrication non terminée) : la date vient du suivi d’affaires. L’adresse saisie ici sera reprise à la création du stop.'
             : 'Affaire dans LIVRIAL : la date est celle de la tournée.') + '</span></section>'
 
         + '<section><h3>CONTENU DE LA COMMANDE</h3>' + lignes
@@ -104,7 +104,8 @@
       $('voile').hidden = false;
       $('fiche-fermer').addEventListener('click', fermer);
       $('fiche').focus();
-      if (s.date_modifiable) { installerDate(s); installerCoordonnees(s); }
+      if (s.date_modifiable) installerDate(s);
+      if (s.coordonnees_modifiables) installerCoordonnees(s);
       if (s.source === 'stop') chargerHistorique(s);
     }
 
@@ -198,15 +199,22 @@
         if (a !== (s.adresse || '').trim())   corps.adresse = a;
         if (t !== (s.telephone || '').trim()) corps.telephone = t;
         err.textContent = '';
-        if (corps.adresse !== undefined && !a) { err.textContent = 'L’adresse ne peut pas être vide.'; return; }
-        if (!Object.keys(corps).length)        { err.textContent = 'Aucune modification à enregistrer.'; return; }
+        if (!a)                         { err.textContent = 'L’adresse ne peut pas être vide.'; return; }
+        if (!Object.keys(corps).length) { err.textContent = 'Aucune modification à enregistrer.'; return; }
 
         bouton.disabled = true; bouton.textContent = 'Enregistrement…';
         try {
-          const res = await fetch('/api/stops/' + encodeURIComponent(s.stop_id), {
-            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(corps),
-          });
+          // Avec un stop : on modifie le stop. Sans stop : la saisie est gardée
+          // à part et reprise à la création du stop (affaire finie).
+          const res = s.source === 'stop'
+            ? await fetch('/api/stops/' + encodeURIComponent(s.stop_id), {
+                method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(corps),
+              })
+            : await fetch('/api/stops?sorties=coordonnees', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ arc_reference: s.arc_reference, adresse: a, telephone: t }),
+              });
           if (res.status === 401) { window.location.href = '/'; return; }
           const rep = await res.json();
           if (!res.ok) throw new Error(rep.error || 'Erreur ' + res.status);
