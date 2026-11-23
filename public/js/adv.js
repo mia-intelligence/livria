@@ -1219,6 +1219,7 @@ function ficheHistoriqueHTML(s) {
   // Statut et livraison
   const statut = `<span class="pill ${STATUS_CLASS[s.statut] || 'todo'}">${STATUS_LABEL[s.statut] || s.statut}</span>`
     + (s.livre_le ? ` <span class="muted" style="font-size:12px">le ${fmtDateHeureFr(s.livre_le)}</span>` : '')
+    + (s.statut === 'LIVRE' && s.livre_par_suivi_le ? ' <span class="muted" style="font-size:12px" title="Affaire passée « Livrée » dans le suivi d\'affaires : le stop s\'est fermé seul, à la date du suivi">· d\'après le suivi d\'affaires</span>' : '')
     + (s.statut === 'ANNULE' && s.annule_le ? ` <span class="muted" style="font-size:12px">le ${fmtDateHeureFr(s.annule_le)}</span>` : '');
   const tournee = [s.tournee, s.vehicule, s.lieu_livraison === 'DEPOT' ? 'Dépôt du client' : (s.lieu_livraison === 'CHANTIER' ? 'Chantier' : '')]
     .filter(Boolean).map(esc).join(' · ');
