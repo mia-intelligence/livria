@@ -1,7 +1,8 @@
 const { getDB, getAdminDB } = require('../../lib/db');
 const { requireAuth } = require('../../lib/auth');
 const { geocoder } = require('../../lib/geo');
-const { lireSorties, modifierDateSortie, historiqueDates, enregistrerAdresseArc } = require('../../lib/sorties');
+const { lireSorties, modifierDateSortie, historiqueDates, enregistrerAdresseArc, aujourdhuiParis } = require('../../lib/sorties');
+const { ANOMALIES, detecter } = require('../../lib/signaler');
 
 // Colonnes de arc_commandes utiles au stop : identification, coordonnées de
 // facturation (adresse de livraison par défaut), règlement (le livreur
@@ -11,7 +12,7 @@ const ARC_COLS = [
   'societe', 'contact', 'adresse_facturation', 'code_postal', 'ville',
   'telephone_client', 'mobile_client', 'gamme', 'montant_ttc',
   'acompte_present', 'montant_acompte', 'taux_acompte', 'solde_avant_livraison', 'montant_solde',
-  'mode_livraison', 'date_livraison_prevue', 'date_sortie_suivi',
+  'mode_livraison', 'date_livraison_prevue', 'date_sortie_suivi', 'statut_suivi',
 ].join(',');
 
 // Attache à chaque stop les infos de sa commande ARC (clé stops.arc_reference).
@@ -55,9 +56,11 @@ async function suiviActif(db) {
   return !error && (data || []).length > 0;
 }
 
-// « Affaires à planifier » : commandes ARC sans stop + stops pas encore placés
-// dans une tournée (ordre 99), toutes dates confondues.
-async function aPlanifier(db, tout) {
+// « Affaires à signaler » (décision du 23/11/2026) : seulement ce qui demande
+// une action de l'ADV ou révèle un désaccord avec le suivi d'affaires.
+//   - arc   : affaires finies dans le suivi qui n'ont pas de stop ;
+//   - stops : stops ouverts qui portent au moins une anomalie (lib/signaler.js).
+async function aSignaler(db, tout) {
   const depuis = new Date(Date.now() - ARC_JOURS_A_PLANIFIER * 86400000).toISOString().slice(0, 10);
   const suivi = await suiviActif(db);
 
@@ -94,19 +97,35 @@ async function aPlanifier(db, tout) {
     && !affairesStop.has((c.numero_document || '').trim().toUpperCase())
     && !masques.has(c.reference_complete));
 
-  const { data: nonPlanifies, error } = await db
-    .from('stops').select('*')
-    .eq('ordre', 99).eq('statut', 'A_LIVRER')
-    .order('date_tournee', { ascending: true });
-  if (error) throw error;
+  // Tous les stops ouverts, avec leur commande ARC : les anomalies se lisent
+  // sur le stop et sur ce que le suivi dit de l'affaire.
+  const ouverts = await toutesLesLignes(() =>
+    db.from('stops').select('*').in('statut', ['A_LIVRER', 'EN_COURS']).order('id'));
+  const { stops: signales, compteurs } = detecter(await attacheArcParPaquets(db, ouverts), aujourdhuiParis());
+  if (arcSansStop.length) compteurs.FINIE_SANS_STOP = arcSansStop.length;
 
   return {
     jours: ARC_JOURS_A_PLANIFIER,
     depuis: tout || suivi ? null : depuis,
     suivi,
     arc: arcSansStop,
-    stops: await attacheArc(db, nonPlanifies),
+    stops: signales,
+    compteurs,
+    anomalies: ANOMALIES,
   };
+}
+
+// Comme attacheArc, par paquets de 50 références : la liste de tous les stops
+// ouverts dépasserait la longueur d'URL acceptée pour un seul filtre.
+async function attacheArcParPaquets(db, stops) {
+  const refs = [...new Set((stops || []).map(s => s.arc_reference).filter(Boolean))];
+  const parRef = {};
+  for (let i = 0; i < refs.length; i += 50) {
+    const { data, error } = await db.from('arc_commandes').select(ARC_COLS).in('reference_complete', refs.slice(i, i + 50));
+    if (error) throw error;
+    for (const c of data || []) parRef[c.reference_complete] = c;
+  }
+  return (stops || []).map(s => ({ ...s, arc: s.arc_reference ? (parRef[s.arc_reference] || null) : null }));
 }
 
 
@@ -274,11 +293,12 @@ module.exports = async function handler(req, res) {
       return res.status(200).json((data || []).map(c => ({ ...c, deja_stop: dejaStop.has(c.reference_complete) })));
     }
 
-    // Affaires à planifier : ?arc=a_planifier (60 derniers jours) ou &tout=1
-    if (req.query.arc === 'a_planifier') {
+    // Affaires à signaler : ?arc=a_signaler (ou l'ancien nom ?arc=a_planifier,
+    // gardé le temps que les navigateurs rechargent la page)
+    if (req.query.arc === 'a_signaler' || req.query.arc === 'a_planifier') {
       if (!['ADV', 'ADMIN'].includes(role)) return res.status(403).json({ error: 'Accès refusé' });
       try {
-        return res.status(200).json(await aPlanifier(db, req.query.tout === '1'));
+        return res.status(200).json(await aSignaler(db, req.query.tout === '1'));
       } catch (e) {
         return res.status(500).json({ error: e.message });
       }
