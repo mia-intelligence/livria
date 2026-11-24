@@ -92,7 +92,7 @@
       </a>
       <a data-section="affaires" onclick="showSection('affaires')">
         <svg class="ic" viewBox="0 0 24 24" fill="none"><path d="M12 2l9 4-9 4-9-4 9-4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M3 12l9 4 9-4M3 18l9 4 9-4" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
-        Affaires à planifier
+        Affaires à signaler
         <span class="badge" id="badge-affaires">0</span>
       </a>
       <a data-section="tournee" onclick="showSection('tournee')">
@@ -170,9 +170,9 @@
             <span class="kpi-sub">À livrer + En cours</span>
           </div>
           <div class="kpi">
-            <span class="kpi-label">À planifier</span>
+            <span class="kpi-label">À signaler</span>
             <span class="kpi-value danger" id="kpi-affaires">—</span>
-            <span class="kpi-sub">stops non planifiés</span>
+            <span class="kpi-sub">affaires avec une anomalie</span>
           </div>
         </div>
 
@@ -212,10 +212,10 @@
               <div id="dash-alerts"></div>
             </div>
 
-            <!-- Affaires à planifier -->
+            <!-- Affaires à signaler -->
             <div class="card">
               <div class="card-head">
-                <h3>À planifier</h3>
+                <h3>À signaler</h3>
                 <a style="font-size:12px;font-weight:600;cursor:pointer;color:var(--turquoise)" onclick="showSection('affaires')">Voir tout →</a>
               </div>
               <div id="dash-affaires-preview">
@@ -226,12 +226,12 @@
         </div>
       </div>
 
-      <!-- ── AFFAIRES À PLANIFIER ──────────────────────────── -->
+      <!-- ── AFFAIRES À SIGNALER ───────────────────────────── -->
       <div class="stops-section" id="section-affaires">
         <div class="page-head">
           <div>
-            <h1>Affaires à planifier</h1>
-            <div class="lead">Commandes ARC qui n'ont pas encore de stop, et stops pas encore placés dans une tournée</div>
+            <h1>Affaires à signaler</h1>
+            <div class="lead">Seulement les affaires qui demandent une action : adresse manquante, date dépassée, désaccord avec le suivi d'affaires…</div>
           </div>
         </div>
         <div class="filter-bar">

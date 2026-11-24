@@ -4,7 +4,7 @@ let allStops = [];
 let activeFilter = 'ALL';     // mode de sortie (chips ATRIAL / Enlèvement / Transporteur)
 let activeStatut = 'ALL';     // statut du stop (chips À livrer / En cours / Livré)
 let tourneeSearch = '';       // recherche dans la tournée du jour
-let affairesSearch = '';      // recherche dans « Affaires à planifier »
+let affairesSearch = '';      // recherche dans « Affaires à signaler »
 
 // Comparaison sans accents ni majuscules
 function normalise(t) {
@@ -152,7 +152,7 @@ function setTopbarDate() {
 // ── Navigation sections ────────────────────────────────────────
 const SECTION_TITLES = {
   dashboard: 'Tableau de bord',
-  affaires: 'Affaires à planifier',
+  affaires: 'Affaires à signaler',
   tournee: 'Tournée du jour',
   stopsdate: 'Gestion des livraisons',
   historique: 'Historique des livraisons'
@@ -205,15 +205,16 @@ async function loadStops() {
 // En cas d'échec, on garde la dernière liste connue.
 async function loadAPlanifier() {
   try {
-    const res = await fetch(`/api/stops?arc=a_planifier${arcTout ? '&tout=1' : ''}`);
+    const res = await fetch(`/api/stops?arc=a_signaler${arcTout ? '&tout=1' : ''}`);
     if (!res.ok) throw new Error(await res.text());
     const d = await res.json();
     arcAPlanifier   = d.arc   || [];
     stopsAPlanifier = d.stops || [];
+    anomaliesRef    = d.anomalies || anomaliesRef;
     arcJours        = d.jours || arcJours;
     arcSuivi        = !!d.suivi;
   } catch (error) {
-    console.error('Erreur chargement affaires à planifier:', error);
+    console.error('Erreur chargement affaires à signaler:', error);
   }
 }
 
@@ -270,7 +271,7 @@ function renderAffairesPreview() {
   const arcs  = arcAPlanifier.slice(0, 3 - stops.length);
 
   if (!stops.length && !arcs.length) {
-    el.innerHTML = '<p style="color:var(--ink-mute);font-size:13px;text-align:center;padding:16px 0">Aucune affaire en attente ✓</p>';
+    el.innerHTML = '<p style="color:var(--ink-mute);font-size:13px;text-align:center;padding:16px 0">Aucune anomalie ✓</p>';
     return;
   }
 
@@ -278,20 +279,23 @@ function renderAffairesPreview() {
     + arcs.map((c, i) => arcRowHTML(c, i, true)).join('');
 }
 
-// ── Affaires à planifier ───────────────────────────────────────
-// Deux listes : les commandes ARC qui n'ont pas encore de stop (remontent
-// d'elles-mêmes sur les N derniers jours), puis les stops créés mais pas
-// encore placés dans une tournée.
+// ── Affaires à signaler ────────────────────────────────────────
+// Décision du 23/11/2026 : la page ne liste plus tout ce qui est à planifier,
+// seulement les affaires qui ont une anomalie. Les règles sont calculées par
+// le serveur (lib/signaler.js) : chaque stop arrive avec ses `anomalies`
+// [{ code, detail }], la plus prioritaire en premier. Un stop est rangé sous
+// sa première anomalie ; les autres sont rappelées sur sa ligne.
+let anomaliesRef = [];   // [{ code, libelle }] dans l'ordre d'affichage (envoyé par l'API)
+
+function libelleAnomalie(code) {
+  const a = anomaliesRef.find(x => x.code === code);
+  return a ? a.libelle : code;
+}
+
 function renderAffaires() {
   const el = document.getElementById('affaires-list');
   const titre = (texte, n) =>
-    `<h3 style="margin:4px 0 6px;font-size:14px;font-weight:700">${texte} <span class="muted" style="font-weight:600">· ${n}</span></h3>`;
-
-  const perimetre = arcSuivi
-    ? 'Fabrication terminée et solde encaissé, d\'après le suivi d\'affaires'
-    : arcTout
-    ? `Toutes les commandes ARC · <a style="cursor:pointer;color:var(--turquoise);font-weight:600" onclick="basculerArcTout(false)">Revenir aux ${arcJours} derniers jours</a>`
-    : `ARC des ${arcJours} derniers jours · <a style="cursor:pointer;color:var(--turquoise);font-weight:600" onclick="basculerArcTout(true)">Voir aussi les plus anciennes</a>`;
+    `<h3 style="margin:4px 0 6px;font-size:14px;font-weight:700">${esc(texte)} <span class="muted" style="font-weight:600">· ${n}</span></h3>`;
 
   // Recherche : les index d'origine sont conservés pour les boutons (masquerArc / creerStopDepuisArc)
   const arcs  = arcAPlanifier.map((c, i) => [c, i])
@@ -302,18 +306,43 @@ function renderAffaires() {
   const info = document.getElementById('aff-search-info');
   if (info) info.textContent = cherche ? `${arcs.length + stopsF.length} résultat(s)` : '';
 
-  let html = titre(arcSuivi ? 'Affaires terminées, prêtes à livrer' : 'Commandes ARC sans stop', cherche ? `${arcs.length} / ${arcAPlanifier.length}` : arcAPlanifier.length)
-    + `<div class="muted" style="font-size:12px;margin-bottom:6px">${perimetre}</div>`;
-  html += arcs.length
-    ? arcs.map(([c, i]) => arcRowHTML(c, i, false)).join('')
-    : `<p style="color:var(--ink-mute);font-size:13px;text-align:center;padding:16px 0">${cherche ? 'Aucune commande ne correspond' : (arcSuivi ? 'Aucune affaire terminée en attente de stop ✓' : 'Toutes les commandes ARC ont un stop ✓')}</p>`;
+  if (!arcs.length && !stopsF.length) {
+    el.innerHTML = `<p style="color:var(--ink-mute);font-size:13px;text-align:center;padding:32px 0">${
+      cherche ? 'Aucune affaire signalée ne correspond' : 'Aucune anomalie : rien à signaler ✓'}</p>`;
+    return;
+  }
 
-  html += '<div style="height:18px"></div>' + titre('Stops à placer dans une tournée', cherche ? `${stopsF.length} / ${stopsAPlanifier.length}` : stopsAPlanifier.length);
-  html += stopsF.length
-    ? stopsF.map(s => affaireRowHTML(s, false)).join('')
-    : `<p style="color:var(--ink-mute);font-size:13px;text-align:center;padding:16px 0">${cherche ? 'Aucun stop ne correspond' : 'Aucun stop en attente — tous ont été planifiés ✓'}</p>`;
-
+  // Un groupe par anomalie, dans l'ordre de priorité
+  const codes = anomaliesRef.length ? anomaliesRef.map(a => a.code)
+    : [...new Set(stopsF.map(s => s.anomalies[0].code))];
+  let html = '';
+  for (const code of codes) {
+    if (code === 'FINIE_SANS_STOP') {
+      if (!arcs.length) continue;
+      html += titre(libelleAnomalie(code), arcs.length)
+        + '<div class="muted" style="font-size:12px;margin-bottom:6px">Fabrication terminée et solde encaissé d\'après le suivi d\'affaires, mais aucun stop dans Livrial.</div>'
+        + arcs.map(([c, i]) => arcRowHTML(c, i, false)).join('')
+        + '<div style="height:18px"></div>';
+      continue;
+    }
+    const duGroupe = stopsF.filter(s => s.anomalies && s.anomalies[0].code === code);
+    if (!duGroupe.length) continue;
+    html += titre(libelleAnomalie(code), duGroupe.length)
+      + duGroupe.map(s => affaireRowHTML(s, false)).join('')
+      + '<div style="height:18px"></div>';
+  }
   el.innerHTML = html;
+}
+
+// Anomalies d'un stop sur sa ligne. La première est déjà le titre du groupe :
+// on n'en garde que le détail. Les suivantes sont rappelées avec leur nom.
+function anomaliesHTML(s) {
+  if (!s.anomalies || !s.anomalies.length) return '';
+  return '<div style="display:flex;flex-direction:column;gap:3px;margin-top:5px">' + s.anomalies.map((a, i) =>
+    `<span style="font-size:12px;color:#8A5A12">${i === 0
+      ? `<b style="font-weight:700">⚠</b> ${esc(a.detail || libelleAnomalie(a.code))}`
+      : `<b style="background:var(--warn-soft, #FFF4E0);border-radius:6px;padding:1px 7px;font-weight:700">⚠ Aussi : ${esc(libelleAnomalie(a.code))}</b> ${esc(a.detail || '')}`}</span>`
+  ).join('') + '</div>';
 }
 
 function onAffairesSearch(v) {
@@ -390,6 +419,11 @@ function hasColis(s) {
   return s.nombre_colis !== null && s.nombre_colis !== undefined;
 }
 
+// Libellé du bouton : on planifie un stop pas encore placé, on modifie les autres.
+function actionAffaire(s) {
+  return !s.anomalies || s.anomalies.some(a => a.code === 'NON_PLANIFIE') ? 'Planifier' : 'Modifier';
+}
+
 function affaireRowHTML(s, compact) {
   const societeLivraison = s.societe_livraison || 'ATRIAL';
 
@@ -423,7 +457,8 @@ function affaireRowHTML(s, compact) {
       <div class="affaire-info">
         <div class="a-name">${esc(s.societe)} ${origineBadge}</div>
         <div class="a-addr">${esc(s.adresse)}</div>
-        ${adresseBadge(s, false)}
+        ${s.anomalies ? '' : adresseBadge(s, false)}
+        ${anomaliesHTML(s)}
         <div class="a-meta">
           ${s.numero_affaire ? `N° ${esc(s.numero_affaire)} · ` : ''}
           ${s.reference_client ? `Réf. <b>${esc(s.reference_client)}</b> · ` : ''}
@@ -433,10 +468,10 @@ function affaireRowHTML(s, compact) {
         ${magasinLine}
       </div>
       ${!compact ? (s.magasin_valide
-        ? `<button class="btn sm primary" onclick="openAssignModal('${s.id}')">Planifier</button>`
+        ? `<button class="btn sm primary" onclick="openAssignModal('${s.id}')">${actionAffaire(s)}</button>`
         : `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
              <button class="btn sm primary" onclick="openAssignModal('${s.id}')"
-               style="background:var(--warn);border-color:var(--warn)">Planifier</button>
+               style="background:var(--warn);border-color:var(--warn)">${actionAffaire(s)}</button>
              <span style="font-size:10px;color:var(--warn);white-space:nowrap">⚠ Magasin non prêt</span>
            </div>`
       ) : ''}
