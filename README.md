@@ -327,3 +327,14 @@ Un clic sur une ligne ouvre la fiche de la livraison : adresse livrée, contact,
 - Les photos n'existent que pour les stops créés depuis la mise en place des photos de dépôt (mi-octobre 2026). La profondeur de l'historique suit la conservation des stops : 12 mois glissants.
 
 API : `GET /api/stops?historique=search&q=…` (liste) et `GET /api/stops?historique=stop&id=…` (fiche), réservées aux rôles ADV et ADMIN.
+
+---
+
+## Évolutions en attente
+
+Notées pour être faites à l'occasion d'un prochain changement, pas avant.
+
+- **Adresse de livraison Livrial → suivi d'affaires à la minute** (noté le 24/11/2026). Aujourd'hui, l'adresse
+  saisie dans Livrial remonte dans le suivi par l'ancien circuit (`retour_stops.py`, passage des 5 minutes, via le
+  classeur). Le statut, la date et l'annulation remontent, eux, en une minute par `releve_livrial.py`. Pour
+  aligner l'adresse : la faire reprendre par le relevé de la minute, côté script Atrial (installation par Étienne).
