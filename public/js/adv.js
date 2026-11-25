@@ -993,8 +993,19 @@ async function updateStopField(id, field, value) {
 }
 
 // ── Nouvelle livraison ADV ────────────────────────────────────
-function openNewStopModal() {
-  document.getElementById('new-stop-modal').classList.remove('hidden');
+// Saisie en cours gardée après une fermeture involontaire (clic sur le fond,
+// touche Échap) : voir « Fermeture générique des modals ».
+let nsBrouillon = false;
+
+// garderBrouillon : vrai pour le bouton « Nouvelle livraison », qui rouvre le
+// formulaire tel qu'il a été laissé s'il s'est fermé par accident.
+function openNewStopModal(garderBrouillon) {
+  const modal = document.getElementById('new-stop-modal');
+  modal.classList.remove('hidden');
+  const reprise = garderBrouillon === true && nsBrouillon;
+  nsBrouillon = false;
+  if (reprise) return;
+  modal.querySelector('.modal').scrollTop = 0;
   document.getElementById('ns-societe').value         = '';
   document.getElementById('ns-adresse').value         = '';
   document.getElementById('ns-telephone').value       = '';
@@ -1016,6 +1027,7 @@ function openNewStopModal() {
 }
 
 function closeNewStopModal() {
+  nsBrouillon = false;
   document.getElementById('new-stop-modal').classList.add('hidden');
 }
 
@@ -1476,15 +1488,36 @@ function renderAdvMap() {
 // ── Fermeture générique des modals ────────────────────────────
 // Croix (dans le HTML) + clic sur le fond + touche Échap : une modale
 // ouverte par erreur ne doit jamais rester bloquée à l'écran.
+//
+// Le clic sur le fond ne ferme que s'il a COMMENCÉ sur le fond : sélectionner
+// un texte à la souris en relâchant hors du cadre produisait un « clic » sur
+// le fond, qui fermait le formulaire en pleine saisie.
+let fondAppuye = null;
+document.addEventListener('mousedown', (e) => {
+  fondAppuye = e.target.classList?.contains('modal-overlay') ? e.target : null;
+});
+
+// Fermeture involontaire (fond, Échap) : la saisie de « Nouvelle livraison »
+// est gardée, la réouverture la retrouve. Seuls Annuler, la croix et
+// l'enregistrement la vident.
+function fermerParAccident(el) {
+  if (el.id === 'new-stop-modal' && !el.classList.contains('hidden')) nsBrouillon = true;
+  el.classList.add('hidden');
+}
+
 document.addEventListener('click', (e) => {
-  if (e.target.classList?.contains('modal-overlay')) {
-    e.target.classList.add('hidden');
+  if (e.target.classList?.contains('modal-overlay') && fondAppuye === e.target) {
+    fermerParAccident(e.target);
   }
+  fondAppuye = null;
 });
 
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
-  document.querySelectorAll('.modal-overlay:not(.hidden)').forEach(el => el.classList.add('hidden'));
+  // Dans une liste déroulante ou un sélecteur de date, Échap referme la liste,
+  // pas le formulaire.
+  if (e.target.matches?.('select, input[type="date"]')) return;
+  document.querySelectorAll('.modal-overlay:not(.hidden)').forEach(fermerParAccident);
 });
 
 // ── Logout ────────────────────────────────────────────────────
