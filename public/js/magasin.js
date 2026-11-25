@@ -247,7 +247,7 @@ function weekCard(s) {
   return `
     <div class="week-card ${ms}" onclick="openPrepSheet('${s.id}')" title="Ouvrir la fiche de préparation">
       ${s.numero_affaire || s.reference_client ? `<div class="wk-affaire">${[s.numero_affaire ? 'N° ' + esc(s.numero_affaire) : '', s.reference_client ? esc(s.reference_client) : ''].filter(Boolean).join(' · ')}</div>` : ''}
-      <div class="wk-societe">${esc(s.societe)}</div>
+      <div class="wk-societe">${esc(s.societe)} ${s.sav ? '<span style="display:inline-block;font-size:10.5px;background:#FDE9D9;color:#A2541A;border-radius:99px;padding:1px 8px;font-weight:700;vertical-align:middle">SAV</span>' : ''}</div>
       <div class="wk-meta">${esc(s.tournee || s.societe_livraison || '')}</div>
       ${tags.length ? `<div class="wk-tags">${tags.join('')}</div>` : ''}
     </div>`;
@@ -334,7 +334,7 @@ function renderList() {
     <div class="stop-card-magasin">
       <div class="stop-num-mag ${numClass}">${num}</div>
       <div class="stop-body">
-        <div class="stop-name">${esc(s.societe)}</div>
+        <div class="stop-name">${esc(s.societe)} ${s.sav ? '<span style="display:inline-block;font-size:10.5px;background:#FDE9D9;color:#A2541A;border-radius:99px;padding:1px 8px;font-weight:700;vertical-align:middle">SAV</span>' : ''}</div>
         <div class="stop-addr">${esc(s.adresse)}</div>
         <div class="stop-meta">
           ${s.numero_affaire ? `N° ${esc(s.numero_affaire)}` : ''}

@@ -7,6 +7,7 @@ let pendingResetId = null;
 let currentTab = 'users';
 let debugStops = [];
 let editStopId = null;
+let esSavInitial = false;    // case « Livraison SAV » à l'ouverture de la fiche
 let esLivreLeInitial = '';   // valeur du champ « Livré le » à l'ouverture de la fiche
 
 // ── Init ───────────────────────────────────────────────────────
@@ -295,7 +296,7 @@ function renderDebugStops(date) {
   tbody.innerHTML = debugStops.map((s, i) => `
     <tr>
       <td class="muted">${i + 1}</td>
-      <td><b>${esc(s.societe)}</b></td>
+      <td><b>${esc(s.societe)}</b>${savBadge(s)}</td>
       <td class="muted">${esc(s.numero_affaire || '—')}</td>
       <td>${s.type_produit ? `<span class="type-badge ${s.type_produit.toLowerCase()}">${s.type_produit}</span>` : '—'}</td>
       <td class="muted">${s.date_tournee ? s.date_tournee.slice(0,10) : '—'}</td>
@@ -305,6 +306,14 @@ function renderDebugStops(date) {
       <td><button class="btn sm" onclick="openEditStop('${s.id}')">✏️ Modifier</button></td>
     </tr>
   `).join('');
+}
+
+// Pastille « SAV » : livraison ajoutée pour un client, sans commande ARC
+// (facture Prodevis), hors suivi d'affaires.
+function savBadge(s) {
+  return s && s.sav
+    ? ' <span title="Livraison SAV : sans commande ARC (facture Prodevis), hors suivi d\'affaires" style="display:inline-block;font-size:10.5px;background:#FDE9D9;color:#A2541A;border-radius:99px;padding:1px 8px;font-weight:700;vertical-align:middle">SAV</span>'
+    : '';
 }
 
 // Nombre de colis : vide → null, sinon entier >= 0 (0 est une valeur valide).
@@ -337,6 +346,8 @@ function openEditStop(id) {
   document.getElementById('es-type-produit').value     = s.type_produit || '';
   document.getElementById('es-reference-client').value = s.reference_client || '';
   document.getElementById('es-groupe').value           = s.groupe_livraison || '';
+  document.getElementById('es-sav').checked            = !!s.sav;
+  esSavInitial = !!s.sav;
 
   // Date et heure réelles de la livraison (modifiables si le statut est « Livré »)
   esLivreLeInitial = s.livre_le ? versChampLocal(new Date(s.livre_le)) : '';
@@ -394,6 +405,10 @@ async function saveEditStop() {
     reference_client: document.getElementById('es-reference-client').value.trim() || null,
     groupe_livraison: document.getElementById('es-groupe').value.trim() || null,
   };
+
+  // Livraison SAV : envoyée seulement si la case a changé
+  const sav = document.getElementById('es-sav').checked;
+  if (sav !== esSavInitial) body.sav = sav;
 
   // Heure de livraison : envoyée seulement si l'admin l'a saisie ou changée
   // (sinon le serveur garde l'heure existante, ou pose l'heure du clic).

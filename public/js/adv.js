@@ -57,6 +57,15 @@ const STATUS_CLASS = { A_LIVRER: 'todo', EN_COURS: 'now', LIVRE: 'done', ANNULE:
 // Stop clos : livré ou annulé. Ni en attente, ni à vérifier.
 function estClos(s) { return s.statut === 'LIVRE' || s.statut === 'ANNULE'; }
 
+// Pastille « SAV » : livraison ajoutée pour un client, sans commande ARC
+// (facture Prodevis), hors suivi d'affaires.
+function savBadge(s) {
+  return s && s.sav
+    ? ' <span title="Livraison SAV : sans commande ARC (facture Prodevis), hors suivi d\'affaires" style="display:inline-block;font-size:10.5px;background:#FDE9D9;color:#A2541A;border-radius:99px;padding:1px 8px;font-weight:700;vertical-align:middle">SAV</span>'
+    : '';
+}
+
+
 const TYPE_COLOR = {
   ATRIAL: '#4BBFBF',
   ENLEVEMENT: '#5B8DB8',
@@ -252,7 +261,7 @@ function renderDashboard() {
         <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line-soft)">
           <div style="width:26px;height:26px;border-radius:50%;background:${TYPE_COLOR[societeLivraison] || '#9AA3AD'};color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">${s.ordre ?? '?'}</div>
           <div style="flex:1;min-width:0">
-            <div style="font-weight:600;font-size:13px">${esc(s.societe)}</div>
+            <div style="font-weight:600;font-size:13px">${esc(s.societe)}${savBadge(s)}</div>
             <div style="font-size:11.5px;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.adresse)}</div>
             ${adresseBadge(s, false)}
           </div>
@@ -455,7 +464,7 @@ function affaireRowHTML(s, compact) {
     <div class="affaire-row">
       <div style="width:10px;height:10px;border-radius:50%;background:${TYPE_COLOR[societeLivraison] || '#9AA3AD'};flex-shrink:0;margin-top:4px"></div>
       <div class="affaire-info">
-        <div class="a-name">${esc(s.societe)} ${origineBadge}</div>
+        <div class="a-name">${esc(s.societe)}${savBadge(s)} ${origineBadge}</div>
         <div class="a-addr">${esc(s.adresse)}</div>
         ${s.anomalies ? '' : adresseBadge(s, false)}
         ${anomaliesHTML(s)}
@@ -847,7 +856,7 @@ function renderTournee() {
     return `
       <tr>
         <td class="strong">${s.ordre ?? '—'}</td>
-        <td class="strong">${esc(s.societe)}</td>
+        <td class="strong">${esc(s.societe)}${savBadge(s)}</td>
         <td class="muted" style="max-width:180px;white-space:normal;word-break:break-word;line-height:1.4">${esc(s.adresse || '—').replace(/,\s*(\d{5})/g, ',<br>$1')}${adresseBadge(s, true)}</td>
         <td class="muted">${s.numero_affaire ? esc(s.numero_affaire) : '—'}${s.reference_client ? `<div style="font-size:11px;font-weight:700;color:var(--turquoise-dark, #2E7F7F)">${esc(s.reference_client)}</div>` : ''}</td>
         <td><span class="type-badge ${societeLivraison.toLowerCase()}">${TYPE_LABEL[societeLivraison] || societeLivraison}</span></td>
@@ -984,8 +993,19 @@ async function updateStopField(id, field, value) {
 }
 
 // ── Nouvelle livraison ADV ────────────────────────────────────
-function openNewStopModal() {
-  document.getElementById('new-stop-modal').classList.remove('hidden');
+// Saisie en cours gardée après une fermeture involontaire (clic sur le fond,
+// touche Échap) : voir « Fermeture générique des modals ».
+let nsBrouillon = false;
+
+// garderBrouillon : vrai pour le bouton « Nouvelle livraison », qui rouvre le
+// formulaire tel qu'il a été laissé s'il s'est fermé par accident.
+function openNewStopModal(garderBrouillon) {
+  const modal = document.getElementById('new-stop-modal');
+  modal.classList.remove('hidden');
+  const reprise = garderBrouillon === true && nsBrouillon;
+  nsBrouillon = false;
+  if (reprise) return;
+  modal.querySelector('.modal').scrollTop = 0;
   document.getElementById('ns-societe').value         = '';
   document.getElementById('ns-adresse').value         = '';
   document.getElementById('ns-telephone').value       = '';
@@ -1002,9 +1022,12 @@ function openNewStopModal() {
   clearArcChoisi();
   document.getElementById('ns-arc-recherche').value = '';
   document.getElementById('ns-arc-resultats').classList.add('hidden');
+  document.getElementById('ns-sav').checked = false;
+  onNsSavChange();
 }
 
 function closeNewStopModal() {
+  nsBrouillon = false;
   document.getElementById('new-stop-modal').classList.add('hidden');
 }
 
@@ -1334,6 +1357,16 @@ function onNsTourneeChange() {
   else if (tournee)               typeEl.value = 'ATRIAL';
 }
 
+// Case « Livraison SAV » : pas de commande ARC à rattacher. La recherche
+// ARC disparaît et la commande éventuellement choisie est retirée.
+function onNsSavChange() {
+  const sav = document.getElementById('ns-sav').checked;
+  document.getElementById('ns-arc-bloc').style.display = sav ? 'none' : '';
+  document.getElementById('ns-affaire-label').textContent = sav ? 'N° de facture' : 'N° Affaire';
+  document.getElementById('ns-affaire').placeholder = sav ? 'Prodevis (facultatif)' : '2026-XXX';
+  if (sav) clearArcChoisi();
+}
+
 async function createStop() {
   const societe           = document.getElementById('ns-societe').value.trim();
   const adresse           = document.getElementById('ns-adresse').value.trim();
@@ -1385,6 +1418,7 @@ async function createStop() {
         groupe_livraison,
         date_tournee,
         arc_reference:    document.getElementById('ns-arc-reference').value || null,
+        sav:              document.getElementById('ns-sav').checked,
       })
     });
 
@@ -1454,15 +1488,36 @@ function renderAdvMap() {
 // ── Fermeture générique des modals ────────────────────────────
 // Croix (dans le HTML) + clic sur le fond + touche Échap : une modale
 // ouverte par erreur ne doit jamais rester bloquée à l'écran.
+//
+// Le clic sur le fond ne ferme que s'il a COMMENCÉ sur le fond : sélectionner
+// un texte à la souris en relâchant hors du cadre produisait un « clic » sur
+// le fond, qui fermait le formulaire en pleine saisie.
+let fondAppuye = null;
+document.addEventListener('mousedown', (e) => {
+  fondAppuye = e.target.classList?.contains('modal-overlay') ? e.target : null;
+});
+
+// Fermeture involontaire (fond, Échap) : la saisie de « Nouvelle livraison »
+// est gardée, la réouverture la retrouve. Seuls Annuler, la croix et
+// l'enregistrement la vident.
+function fermerParAccident(el) {
+  if (el.id === 'new-stop-modal' && !el.classList.contains('hidden')) nsBrouillon = true;
+  el.classList.add('hidden');
+}
+
 document.addEventListener('click', (e) => {
-  if (e.target.classList?.contains('modal-overlay')) {
-    e.target.classList.add('hidden');
+  if (e.target.classList?.contains('modal-overlay') && fondAppuye === e.target) {
+    fermerParAccident(e.target);
   }
+  fondAppuye = null;
 });
 
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
-  document.querySelectorAll('.modal-overlay:not(.hidden)').forEach(el => el.classList.add('hidden'));
+  // Dans une liste déroulante ou un sélecteur de date, Échap referme la liste,
+  // pas le formulaire.
+  if (e.target.matches?.('select, input[type="date"]')) return;
+  document.querySelectorAll('.modal-overlay:not(.hidden)').forEach(fermerParAccident);
 });
 
 // ── Logout ────────────────────────────────────────────────────
@@ -1545,7 +1600,7 @@ function afficherStopsDate() {
     return `
     <tr>
       <td class="muted">${i + 1}</td>
-      <td class="strong">${esc(s.societe)}</td>
+      <td class="strong">${esc(s.societe)}${savBadge(s)}</td>
       <td class="muted">${s.numero_affaire ? esc(s.numero_affaire) : '—'}${s.reference_client ? `<div style="font-size:11px;font-weight:700;color:var(--turquoise-dark, #2E7F7F)">${esc(s.reference_client)}</div>` : ''}</td>
       <td><span class="type-badge ${sl.toLowerCase()}">${TYPE_LABEL[sl] || sl}</span></td>
       <td class="muted">${esc(s.tournee || '—')}</td>
@@ -1572,6 +1627,7 @@ function lireFicheStopDate() {
     type_produit:     v('sd-type-produit'),
     reference_client: v('sd-reference-client').trim(),
     groupe_livraison: v('sd-groupe').trim(),
+    sav:              document.getElementById('sd-sav').checked,
   };
 }
 
@@ -1594,6 +1650,7 @@ function ouvrirStopDate(id) {
   set('sd-type-produit', s.type_produit || '');
   set('sd-reference-client', s.reference_client || '');
   set('sd-groupe', s.groupe_livraison || '');
+  document.getElementById('sd-sav').checked = !!s.sav;
 
   // Photographie de la fiche avant toute proposition automatique : seul ce
   // qui en diffère à l'enregistrement est envoyé au serveur.
@@ -1637,7 +1694,7 @@ async function enregistrerStopDate() {
   // renvoi au suivi d'affaires pour un champ qui n'a pas bougé.
   const body = {};
   ['societe', 'adresse', 'telephone', 'date_tournee', 'statut', 'tournee', 'vehicule',
-   'type_produit', 'reference_client', 'groupe_livraison'].forEach(k => {
+   'type_produit', 'reference_client', 'groupe_livraison', 'sav'].forEach(k => {
     if (f[k] !== sdInitial[k]) body[k] = f[k] === '' ? null : f[k];
   });
 

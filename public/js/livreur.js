@@ -351,7 +351,7 @@ function renderStopsList() {
     <div class="stop-card" onclick="openSheet('${s.id}')">
       <div class="stop-num ${sc}">${num}</div>
       <div class="stop-info">
-        <div class="stop-name">${esc(s.societe)}${typeBadge}${groupBadge}</div>
+        <div class="stop-name">${esc(s.societe)} ${s.sav ? '<span style="display:inline-block;font-size:10.5px;background:#FDE9D9;color:#A2541A;border-radius:99px;padding:1px 8px;font-weight:700;vertical-align:middle">SAV</span>' : ''}${typeBadge}${groupBadge}</div>
         <div class="stop-addr">${esc(s.adresse)}</div>
         <div class="stop-meta">
           ${s.numero_affaire ? `N° ${esc(s.numero_affaire)}` : ''}
